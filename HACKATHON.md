@@ -23,8 +23,8 @@ TrustPack is an open-source software supply-chain integrity analyzer designed to
 
 ## AI Models Used
 
-**Model:** GPT-OSS-120B  
-**License:** Apache 2.0  
+**Model** - GPT-OSS-120B  
+**License** - Apache 2.0  
 **Inference Provider:** Groq
 
 ### Reason for Model Selection
