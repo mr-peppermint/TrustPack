@@ -141,6 +141,26 @@ python -m uvicorn app.main:app --reload --port 8000
   exhausted TrustPack says so in `limitations` instead of claiming the tag does not exist.
 * History is stored in `backend/data/trustpack.db` (SQLite, created on first use).
 
+## Running across devices on a LAN
+
+`localhost`/`127.0.0.1` always means "this same machine" — a server bound to it is unreachable from any
+other device, no matter how it's addressed. To let a frontend on a different device reach this backend:
+
+1. Bind to all interfaces, not just loopback: `python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`
+2. Find this machine's LAN IP: `ipconfig getifaddr en0` (macOS Wi-Fi), `ip addr` (Linux), `ipconfig` (Windows) —
+   or System Settings → Wi-Fi/Network → Details.
+3. On the *other* device, set `VITE_API_BASE_URL=http://<that IP>:8000` in the frontend's `.env.local` and
+   restart `npm run dev`. Each device still opens its own frontend at its own `localhost:5173` — only the
+   API calls that frontend makes need to target the backend device's IP.
+4. Allow inbound connections on port 8000 in the backend device's firewall.
+5. All devices must be on the same LAN/Wi-Fi (and not on a network with client/AP isolation, common on
+   guest Wi-Fi, which blocks device-to-device traffic even on the same SSID).
+
+`CORS_ORIGINS` (below) does **not** need the backend's IP: it matches the frontend page's own origin
+(`http://localhost:5173`), which stays the same regardless of where the backend lives. It only needs an
+entry added if a frontend is itself opened via its device's LAN IP instead of `localhost` (e.g. to view it
+from a phone on the same network).
+
 ## Configuration
 
 All settings are environment variables, documented with defaults in [.env.example](.env.example). The most
