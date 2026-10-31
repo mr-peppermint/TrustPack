@@ -19,8 +19,16 @@ function shouldPlayIntro() {
 /** Decided once per page load (not per render) so StrictMode double-mounts agree. Plays once per browser session. */
 export const playIntro = shouldPlayIntro();
 
-/** Seconds to wait before the landing hero starts animating, so it rises as the splash fades. */
-export const heroDelay = playIntro ? INTRO_MS / 1000 : 0.05;
+const loadedAt = performance.now();
+
+/**
+ * Seconds to wait before the landing hero starts animating. Only the first mount, while the splash is still up,
+ * waits for it to fade; later mounts (e.g. returning from another page) start almost immediately.
+ */
+export function getHeroDelay() {
+  const splashLeft = playIntro ? INTRO_MS - (performance.now() - loadedAt) : 0;
+  return splashLeft > 0 ? splashLeft / 1000 : 0.05;
+}
 
 export const after = (seconds: number): CSSProperties => ({ animationDelay: `${seconds}s` });
 export const stagger = (index: number) => ({ '--i': index }) as CSSProperties;

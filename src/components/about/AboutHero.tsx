@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import Wordmark from '../common/Wordmark';
-import { after, heroDelay } from '../../lib/motion';
+import { after, getHeroDelay } from '../../lib/motion';
 
 export default function AboutHero() {
-  const d = heroDelay;
+  const [d] = useState(getHeroDelay); // fixed per mount so re-renders never retime a running animation
   return (
     <section className="relative isolate overflow-hidden border-b border-line pb-12 pt-4">
       <p className="eyebrow animate-rise" style={after(d)}>About TrustPack</p>
