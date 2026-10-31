@@ -124,5 +124,6 @@ def to_result(report: Dict[str, Any]) -> Dict[str, Any]:
             "buildProvenance": bool(attested),
             "attestation": integrity.get("provenance_detail") or "No provenance information is available.",
         },
+        "fromCache": bool((report.get("cache") or {}).get("hit")),
     })
     return result

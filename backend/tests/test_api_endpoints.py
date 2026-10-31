@@ -84,7 +84,8 @@ def test_frontend_contract_matches_src_types_analysis_ts():
     analysis_id = started.json()["id"]
 
     result = client.get(f"/analyses/{analysis_id}").json()
-    assert set(result) == {"id", "package", "sourceRepo", "status", "createdAt", "risk", "aiExplanation", "comparison", "files", "provenance"}
+    assert set(result) == {"id", "package", "sourceRepo", "status", "createdAt", "risk", "aiExplanation", "comparison", "files", "provenance", "fromCache"}
+    assert result["fromCache"] is False
     assert result["package"] == {"name": "demo", "ecosystem": "PyPI", "version": "1.0"}
     assert result["status"] in ("verified", "warning", "high_risk")
     assert set(result["risk"]) == {"status", "score", "findings"} and isinstance(result["risk"]["findings"], list)

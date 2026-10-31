@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, ExternalLink, FileCheck, FileMinus, FilePen, FilePlus, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Database, ExternalLink, FileCheck, FileMinus, FilePen, FilePlus, XCircle } from 'lucide-react';
 import RiskSummary from '../components/analysis/RiskSummary';
 import FileChangesTable from '../components/analysis/FileChangesTable';
 import StatCard from '../components/dashboard/StatCard';
@@ -41,6 +41,11 @@ export default function AnalysisResults() {
           <span className="font-mono">{pkg.name}</span>
           <span className="font-mono text-base font-normal text-muted">{pkg.version}</span>
           <span className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs font-normal text-muted">{pkg.ecosystem}</span>
+          {data.fromCache && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-line bg-sunken px-2 py-0.5 text-xs font-normal text-muted" title="A matching analysis of this exact package version was already on record, so this result was served from the shared cache instead of being recomputed.">
+              <Database className="h-3 w-3" aria-hidden />Cached result
+            </span>
+          )}
         </h2>
       </div>
 

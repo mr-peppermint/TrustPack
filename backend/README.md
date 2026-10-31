@@ -157,6 +157,35 @@ important ones:
 | `ANALYSIS_TIMEOUT_SECONDS` | 90 | budget for the deterministic analysis |
 | `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TIMEOUT` | off / groq / `openai/gpt-oss-120b` / empty / empty / 60 | see below |
 | `CORS_ORIGINS` | `localhost:3000,5173` | browser origins allowed to call the API |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | empty / empty | shared analysis cache, see below |
+| `CACHE_TTL_SECONDS`, `CACHE_ENGINE_VERSION` | 604800 (7 days) / `1` | cache freshness |
+
+## Shared analysis cache (Supabase)
+
+A package version is immutable once published, so a finished analysis of it is valid for everyone. With
+this enabled, the first request for a given (ecosystem, package, version, repository) runs the full
+download-and-compare analysis as usual and saves the result; every later request for that same version —
+from any user or server instance — is served straight from the cache, skipping the registry download,
+extraction and comparison entirely. The result carries `"cache": {"hit": true, ...}` (`fromCache: true` in
+the frontend contract) so the UI can show it was cached.
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In the SQL editor, run [supabase/schema.sql](supabase/schema.sql) to create the `analysis_cache` table.
+   Row Level Security is enabled with no policies, so only the service-role key below can read or write it.
+3. In `backend/.env`:
+   ```env
+   SUPABASE_URL=https://<project-ref>.supabase.co
+   SUPABASE_SERVICE_KEY=<service_role key, from Project Settings → API>
+   ```
+4. Restart the server.
+
+Without both variables set, the cache is simply off and every analysis runs fresh — nothing else changes.
+Only a *complete* deterministic analysis is ever cached (a download failure, timeout or AI explanation is
+never stored or served as if it were a hit). If `AI_ENABLED` is on and a cached entry doesn't have one yet,
+an explanation is generated for it on that request and the cache is updated, without re-running the
+analysis. Bump `CACHE_ENGINE_VERSION` after changing detection rules or scoring so old cached verdicts stop
+being served; lower `CACHE_TTL_SECONDS` to re-check packages more often (e.g. in case a since-published
+version was replaced on the registry).
 
 ## GPT-OSS-120B setup
 

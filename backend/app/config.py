@@ -64,6 +64,17 @@ class Settings:
     REPORT_RETENTION_LIMIT: int = int(os.getenv("REPORT_RETENTION_LIMIT", "1000"))
     REPORT_TTL_SECONDS: int = int(os.getenv("REPORT_TTL_SECONDS", "0"))
 
+    # Shared analysis cache (Supabase). Disabled unless both SUPABASE_URL and SUPABASE_SERVICE_KEY are set.
+    # The service key is a server-side secret: never commit it, never expose it to the frontend.
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    SUPABASE_TABLE: str = os.getenv("SUPABASE_TABLE", "").strip() or "analysis_cache"
+    SUPABASE_TIMEOUT: float = float(os.getenv("SUPABASE_TIMEOUT", "5"))
+    # Cached reports older than this are ignored (0 = never expire). Bump CACHE_ENGINE_VERSION after
+    # changing detection rules or scoring so older cached verdicts are no longer served.
+    CACHE_TTL_SECONDS: int = int(os.getenv("CACHE_TTL_SECONDS", str(7 * 24 * 3600)))
+    CACHE_ENGINE_VERSION: str = os.getenv("CACHE_ENGINE_VERSION", "").strip() or "1"
+
     # Concurrency / timeouts
     MAX_CONCURRENT_ANALYSES: int = int(os.getenv("MAX_CONCURRENT_ANALYSES", "3"))
     ANALYSIS_TIMEOUT_SECONDS: float = float(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "90"))

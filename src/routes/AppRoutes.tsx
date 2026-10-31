@@ -5,6 +5,7 @@ import AnalysisResults from '../pages/AnalysisResults';
 import History from '../pages/History';
 import About from '../pages/About';
 import Settings from '../pages/Settings';
+import TermsPage from '../pages/TermsPage';
 import EmptyState from '../components/common/EmptyState';
 
 export default function AppRoutes() {
@@ -17,6 +18,7 @@ export default function AppRoutes() {
       <Route path="/history" element={<History />} />
       <Route path="/about" element={<Navigate to="/" replace />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="*" element={<EmptyState title="Page not found" description="This page does not exist." action={<Link to="/" className="btn">Go to home</Link>} />} />
     </Routes>
   );

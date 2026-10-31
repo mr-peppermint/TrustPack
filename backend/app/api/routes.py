@@ -8,7 +8,7 @@ from app.api import frontend_adapter
 from app.config import settings
 from app.models.request import AnalyzeRequest
 from app.models.response import AnalyzeResponse
-from app.services import orchestrator, report_generator
+from app.services import ai_explainer, analysis_cache, orchestrator, report_generator
 from app.utils.errors import AnalysisTimeoutError
 from app.utils.logging import get_logger
 
@@ -18,13 +18,36 @@ logger = get_logger(__name__)
 _semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_ANALYSES)
 
 
+async def _serve_cached(request: AnalyzeRequest) -> Optional[Dict[str, Any]]:
+    """A finished analysis of the same package version from the shared cache, saved to local history
+    under a new id. None on a miss (or when the cache is off/unreachable)."""
+    hit = await analysis_cache.lookup(
+        request.ecosystem, request.package_name, request.version, request.repository_url,
+    )
+    if hit is None:
+        return None
+    report = {k: v for k, v in hit["document"].items() if k not in ("report_id", "created_at")}
+    if settings.AI_ENABLED and (report.get("ai_explanation") or {}).get("status") != "ok":
+        # The entry was written while AI was off or failing; the deterministic part is still valid.
+        report["ai_explanation"] = await ai_explainer.explain(report)
+        if report["ai_explanation"].get("status") == "ok":
+            await analysis_cache.store(report, request.repository_url)
+    report["cache"] = {"hit": True, "analyzed_at": hit["analyzed_at"]}
+    report_generator.save_report(report)
+    logger.info("Served %s@%s from the shared cache" % (request.package_name, request.version))
+    return report
+
+
 async def _run_analysis(request: AnalyzeRequest) -> Dict[str, Any]:
+    cached = await _serve_cached(request)  # before taking an analysis slot: hits cost no registry traffic
+    if cached is not None:
+        return cached
     # TrustPackError subclasses intentionally propagate to the app-level exception handler in
     # main.py, which renders the consistent {"error": {"code", "message"}} shape.
     budget = settings.ANALYSIS_TIMEOUT_SECONDS + (settings.AI_TIMEOUT + 2 if settings.AI_ENABLED else 0)
     async with _semaphore:
         try:
-            return await asyncio.wait_for(
+            report = await asyncio.wait_for(
                 orchestrator.analyze_package(
                     request.package_name, request.version,
                     ecosystem=request.ecosystem, repository_url=request.repository_url,
@@ -33,6 +56,8 @@ async def _run_analysis(request: AnalyzeRequest) -> Dict[str, Any]:
             )
         except asyncio.TimeoutError:
             raise AnalysisTimeoutError("Analysis exceeded the time budget")
+    await analysis_cache.store(report, request.repository_url)
+    return report
 
 
 def _history_item(report: Dict[str, Any]) -> Dict[str, Any]:

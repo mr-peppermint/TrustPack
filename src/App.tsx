@@ -5,11 +5,15 @@ import Header from './components/layout/Header';
 import AppRoutes from './routes/AppRoutes';
 import PageBackdrop from './components/common/PageBackdrop';
 import IntroSplash from './components/common/IntroSplash';
+import Footer from './components/layout/Footer';
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
-  useEffect(() => setMenuOpen(false), [pathname]);
+  useEffect(() => {
+    setMenuOpen(false);
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   return (
     <div className="relative isolate min-h-screen">
@@ -23,6 +27,7 @@ export default function App() {
             <AppRoutes />
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );

@@ -66,4 +66,6 @@ export interface AnalysisResult extends AnalysisSummary {
   comparison: ComparisonSummary;
   files: FileChange[];
   provenance: Provenance;
+  /** True when this result was served from the shared cache instead of a fresh analysis. */
+  fromCache?: boolean;
 }

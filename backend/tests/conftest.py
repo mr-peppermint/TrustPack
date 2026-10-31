@@ -39,6 +39,8 @@ def _isolated_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "DATABASE_PATH", str(tmp_path / "history.db"))
     monkeypatch.setattr(settings, "AI_ENABLED", False)
     monkeypatch.setattr(settings, "AI_API_KEY", "")
+    monkeypatch.setattr(settings, "SUPABASE_URL", "")
+    monkeypatch.setattr(settings, "SUPABASE_SERVICE_KEY", "")
 
 
 def make_tar_gz(files: Dict[str, bytes], root_dir: Optional[str] = None) -> bytes:

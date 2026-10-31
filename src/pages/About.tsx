@@ -3,7 +3,6 @@ import WhyTrustPack from '../components/about/WhyTrustPack';
 import WorkflowSection from '../components/about/WorkflowSection';
 import AnalysisEngine from '../components/about/AnalysisEngine';
 import RiskIndicators from '../components/about/RiskIndicators';
-import Terms from '../components/about/Terms';
 import Reveal from '../components/about/Reveal';
 
 export default function About() {
@@ -14,7 +13,6 @@ export default function About() {
       <Reveal><WorkflowSection /></Reveal>
       <Reveal><AnalysisEngine /></Reveal>
       <Reveal><RiskIndicators /></Reveal>
-      <Reveal><Terms /></Reveal>
     </div>
   );
 }

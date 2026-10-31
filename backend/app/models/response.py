@@ -185,3 +185,5 @@ class AnalyzeResponse(BaseModel):
     limitations: List[str] = []
     analysis_complete: bool
     ai_explanation: Optional[AIExplanation] = None
+    # Present when the report was served from the shared cache: {"hit": true, "analyzed_at": <epoch>}.
+    cache: Optional[Dict[str, Any]] = None
