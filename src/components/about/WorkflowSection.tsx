@@ -8,7 +8,7 @@ const STEPS: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: Hash, title: 'File Analysis', text: 'TrustPack builds file inventories and calculates cryptographic hashes.' },
   { icon: GitCompareArrows, title: 'Comparison Engine', text: 'It identifies added, removed, modified, and unchanged files.' },
   { icon: BarChart3, title: 'Risk Assessment', text: 'Unexpected differences and relevant verification evidence are evaluated.' },
-  { icon: Sparkles, title: 'AI Explanation', text: 'GPT-OSS-120B helps explain the detected differences and their potential implications, using the analysis evidence.' },
+  { icon: Sparkles, title: 'AI Explanation', text: 'A local Ollama model helps explain the detected differences and their potential implications, using the analysis evidence.' },
   { icon: FileText, title: 'Final Report', text: 'You receive a structured report with risk indicators and file-level findings.' },
 ];
 

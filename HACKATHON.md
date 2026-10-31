@@ -23,10 +23,9 @@ TrustPack is an open-source software supply-chain integrity analyzer designed to
 
 ## AI Models Used
 
-**Model** - GPT-OSS-120B  
-**License** - Apache 2.0  
-**Inference Provider:** Groq
+**Model** - Qwen2.5 7B (Alibaba, Apache 2.0)  
+**Inference Provider:** Ollama, running locally
 
 ### Reason for Model Selection
 
-We selected GPT-OSS-120B because it is an open-weight reasoning model suitable for analyzing complex technical information and generating structured explanations.
+We run Qwen2.5 7B locally through Ollama so no package data leaves the machine and no API key is needed. It only explains the deterministic results; it never changes the verdict.
