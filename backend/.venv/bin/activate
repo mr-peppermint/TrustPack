@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/psl/backend trustpack/backend/.venv"
+VIRTUAL_ENV="/Users/dex/Documents/GitHub/TrustPack/backend/.venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

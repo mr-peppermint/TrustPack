@@ -1,100 +1,76 @@
-"""Heuristics for distinguishing expected build transformations from
-genuine, unexplained differences between source and published content.
+"""Residual classification of differences that are NOT explained as generated output.
 
-This is deliberately conservative and documented: it never claims a file is
-safe just because it matches a "generated" pattern, it only changes how the
-difference is *labeled* so risk assessment downstream can weigh it correctly.
-Every EXPECTED_GENERATED classification records WHY it was classified that
-way, so a reviewer can see (and challenge) the specific rule that fired
-rather than trusting an opaque verdict.
+Generated-output detection lives in generated_file_detector (evidence-based). What is left here is
+deliberately simple: a file only on the published side is ADDED; a source-like file whose content
+changed is UNEXPLAINED (it deserves review); anything else that changed is MODIFIED. The one structural
+exception is package.json, which npm rewrites at publish time, so it is compared field by field.
 """
-from pathlib import PurePosixPath
-from typing import Any, Dict, Optional, Tuple
-
-_GENERATED_DIR_PREFIXES = ("dist/", "build/", "out/", "umd/", "cjs/", "esm/", "lib-es/")
-_GENERATED_SUFFIXES = (".min.js", ".min.css", ".map")
+import json
+from pathlib import Path, PurePosixPath
+from typing import Any, Dict, List, Optional, Tuple
 
 # Source-like extensions where an unexplained content diff is noteworthy.
-_SOURCE_LIKE_EXTENSIONS = {
-    ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py", ".sh", ".rb", ".json",
+SOURCE_LIKE_EXTENSIONS = {
+    ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".py", ".pyx", ".pxd", ".c", ".cpp", ".h",
+    ".sh", ".rb", ".json", ".toml", ".cfg", ".pth", ".ps1", ".bat", ".cmd",
 }
+
+# package.json fields that change what gets installed or executed. Everything else (gitHead, _id,
+# readme, version stamps, funding...) is publish-time metadata.
+PACKAGE_JSON_SECURITY_KEYS = (
+    "scripts", "dependencies", "optionalDependencies", "peerDependencies", "bundledDependencies",
+    "bundleDependencies", "bin", "main", "module", "exports", "browser", "type", "files", "gypfile",
+    "os", "cpu", "directories",
+)
 
 
 def normalize_path(path: str) -> str:
     return PurePosixPath(path.strip().lstrip("./")).as_posix()
 
 
-def _declared_build_outputs(package_json: Optional[Dict[str, Any]]) -> Dict[str, str]:
-    """Map normalized path -> the package.json field that declared it."""
-    if not package_json:
-        return {}
-    outputs: Dict[str, str] = {}
-    for key in ("main", "module", "types", "typings", "browser"):
-        val = package_json.get(key)
-        if isinstance(val, str):
-            outputs[normalize_path(val)] = key
-    exports = package_json.get("exports")
-    if isinstance(exports, str):
-        outputs[normalize_path(exports)] = "exports"
-    elif isinstance(exports, dict):
-        for v in exports.values():
-            if isinstance(v, str):
-                outputs[normalize_path(v)] = "exports"
-    return outputs
+def package_json_differences(published: Dict[str, Any], source: Dict[str, Any]) -> List[str]:
+    """Names of security-relevant package.json fields whose values differ between the two documents."""
+    return [k for k in PACKAGE_JSON_SECURITY_KEYS if published.get(k) != source.get(k)]
 
 
-def generated_reason(path: str, package_json: Optional[Dict[str, Any]] = None) -> Optional[str]:
-    """Return a human-readable reason this path matches a known
-    build-generated pattern, or None if it doesn't match any rule.
-    """
-    norm = normalize_path(path)
-    lower = norm.lower()
-
-    if norm.endswith(".d.ts"):
-        return "matches *.d.ts (TypeScript declaration files are compiler-generated)"
-    for prefix in _GENERATED_DIR_PREFIXES:
-        if lower.startswith(prefix):
-            return f"path starts with '{prefix}' (conventional build-output directory)"
-    for suffix in _GENERATED_SUFFIXES:
-        if lower.endswith(suffix):
-            return f"matches '*{suffix}' (conventional build-output/minified/source-map suffix)"
-    declared = _declared_build_outputs(package_json)
-    if norm in declared:
-        return f"declared as package.json '{declared[norm]}' entry point"
-    return None
+def _load_json(root: Optional[Path], rel: str) -> Optional[Dict[str, Any]]:
+    if root is None:
+        return None
+    try:
+        data = json.loads((root / rel).read_text(encoding="utf-8", errors="ignore"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
-def is_expected_generated(path: str, package_json: Optional[Dict[str, Any]] = None) -> bool:
-    return generated_reason(path, package_json) is not None
-
-
-def classify_difference(
+def classify_residual(
     path: str,
     *,
     in_source: bool,
     in_published: bool,
     hashes_match: bool,
-    package_json: Optional[Dict[str, Any]] = None,
+    published_root: Optional[Path] = None,
+    source_root: Optional[Path] = None,
+    source_path: Optional[str] = None,
 ) -> Tuple[str, Optional[str]]:
-    """Return (status, reason). status is one of: IDENTICAL, REMOVED, ADDED,
-    MODIFIED, EXPECTED_GENERATED, UNEXPLAINED. reason is populated only for
-    EXPECTED_GENERATED (explaining which rule matched) so normalization never
-    silently erases why a security-relevant difference was downgraded.
-    """
+    """Return (status, reason) for a file that is not identical and not explained as generated."""
     if in_source and in_published and hashes_match:
         return "IDENTICAL", None
     if in_source and not in_published:
         return "REMOVED", None
-
-    reason = generated_reason(path, package_json)
-    if reason:
-        return "EXPECTED_GENERATED", reason
-
     if in_published and not in_source:
         return "ADDED", None
 
-    # Present on both sides, content differs, not a recognized build pattern.
+    if PurePosixPath(path).name == "package.json":
+        pub = _load_json(published_root, path)
+        src = _load_json(source_root, source_path or path)
+        if pub is not None and src is not None:
+            differing = package_json_differences(pub, src)
+            if not differing:
+                return "MODIFIED", "differs only in publish-time metadata fields (no scripts, dependencies, entry points or file lists changed)"
+            return "UNEXPLAINED", "security-relevant package.json fields differ: " + ", ".join(differing)
+
     ext = PurePosixPath(normalize_path(path)).suffix.lower()
-    if ext in _SOURCE_LIKE_EXTENSIONS:
+    if ext in SOURCE_LIKE_EXTENSIONS:
         return "UNEXPLAINED", None
     return "MODIFIED", None

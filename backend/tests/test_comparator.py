@@ -48,11 +48,23 @@ def test_removed_file_only_in_source():
     assert result.summary["removed"] == 1
 
 
-def test_dist_bundle_is_expected_generated():
+def test_dist_file_with_no_evidence_is_uncertain_not_trusted():
+    """Location alone must never earn trust: a bundle in dist/ with nothing tying it to the source is
+    UNCERTAIN (and later scored), not EXPECTED_GENERATED."""
     src = {}
     pub = {"dist/bundle.min.js": _rec("dist/bundle.min.js", b"minified")}
     result = compare_manifests(src, pub, {})
-    assert result.summary["expected_generated"] == 1
+    assert result.summary["expected_generated"] == 0
+    assert result.summary["uncertain"] == 1
+
+
+def test_dist_file_with_source_counterpart_is_expected_generated():
+    src = {"src/parser.ts": _rec("src/parser.ts", b"export const x = 1")}
+    pub = {"dist/parser.js": _rec("dist/parser.js", b"exports.x = 1")}
+    result = compare_manifests(src, pub, {})
+    entry = next(e for e in result.entries if e["path"] == "dist/parser.js")
+    assert entry["status"] == "EXPECTED_GENERATED"
+    assert any("src/parser.ts" in ev for ev in entry["evidence"])
 
 
 def test_declared_main_output_is_expected_generated():

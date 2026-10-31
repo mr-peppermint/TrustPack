@@ -255,3 +255,218 @@ def test_safe_extract_succeeds_for_valid_archive(tmp_path):
     assert count == 2
     assert (dest / "package" / "a.txt").read_text() == "hello"
     assert (dest / "package" / "sub" / "b.txt").read_text() == "world"
+
+
+# ======================================================================================
+# Hardening added with PyPI support: zip/wheel extraction, URL rules, DNS pinning, caps
+# ======================================================================================
+import asyncio
+import os
+import stat
+import zipfile
+
+import app.utils.pinned_transport as pinned
+from app.utils.errors import DownloadError
+from app.utils.security import safe_extract_zip
+from tests.conftest import make_zip
+
+_ZIP_LIMITS = dict(max_file_count=100, max_total_size=1_000_000, max_single_file_size=500_000)
+
+
+def _extract_zip(tmp_path, blob, **overrides):
+    archive = tmp_path / "a.zip"
+    archive.write_bytes(blob)
+    dest = tmp_path / "out"
+    dest.mkdir(exist_ok=True)
+    return safe_extract_zip(archive, dest, **{**_ZIP_LIMITS, **overrides}), dest
+
+
+@pytest.mark.parametrize("name", ["../evil.txt", "a/../../evil.txt", "/etc/passwd", "C:/Windows/evil.txt", "a\\..\\evil.txt"])
+def test_zip_rejects_traversal_absolute_and_backslash_paths(tmp_path, name):
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({name: b"x"}))
+    assert not (tmp_path / "evil.txt").exists()
+
+
+def test_zip_rejects_symlink_and_special_files(tmp_path):
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({"link": b"/etc/passwd"}, modes={"link": stat.S_IFLNK | 0o777}))
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({"fifo": b""}, modes={"fifo": stat.S_IFIFO | 0o644}))
+
+
+def test_zip_rejects_duplicate_entries(tmp_path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("same.txt", b"first")
+        with pytest.warns(UserWarning):
+            zf.writestr("same.txt", b"second")
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, buf.getvalue())
+
+
+def test_zip_enforces_size_count_and_depth_limits(tmp_path):
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({"big.bin": b"x" * 2000}), max_single_file_size=1000)
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({"a.bin": b"x" * 600, "b.bin": b"x" * 600}), max_total_size=1000)
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({f"f{i}": b"x" for i in range(10)}), max_file_count=5)
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, make_zip({"/".join(["d"] * 40) + "/f": b"x"}), max_path_depth=10)
+
+
+def test_zip_rejects_decompression_bomb_by_ratio_without_writing_it(tmp_path):
+    blob = make_zip({"zeros.bin": b"\0" * (30 * 1024 * 1024)})  # compresses ~1000:1
+    assert len(blob) < 100_000
+    with pytest.raises(ArchiveSecurityError):
+        _extract_zip(tmp_path, blob, max_single_file_size=50 * 1024 * 1024, max_total_size=50 * 1024 * 1024, max_compression_ratio=200)
+    assert not (tmp_path / "out" / "zeros.bin").exists()
+
+
+def test_zip_corrupted_and_non_zip_inputs_are_corruption_errors(tmp_path):
+    with pytest.raises(ArchiveCorruptionError):
+        _extract_zip(tmp_path, b"PK\x03\x04 definitely not a real zip")
+
+
+def test_zip_extracts_valid_wheel_and_keeps_only_safe_permissions(tmp_path):
+    blob = make_zip({"pkg/run.py": b"print(1)", "pkg/tool": b"#!/bin/sh\n"}, modes={"pkg/tool": 0o104755})  # setuid + exec
+    count, dest = _extract_zip(tmp_path, blob)
+    assert count == 2
+    mode = os.stat(dest / "pkg" / "tool").st_mode
+    assert mode & stat.S_IXUSR and not mode & stat.S_ISUID
+
+
+def test_tar_extraction_drops_setuid_bits(tmp_path):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo("tool")
+        info.size, info.mode = 3, 0o4755
+        tar.addfile(info, io.BytesIO(b"abc"))
+    archive = tmp_path / "t.tgz"
+    archive.write_bytes(buf.getvalue())
+    dest = tmp_path / "o"
+    dest.mkdir()
+    safe_extract_tar_gz(archive, dest, max_file_count=10, max_total_size=1000, max_single_file_size=1000)
+    mode = os.stat(dest / "tool").st_mode
+    assert mode & stat.S_IXUSR and not mode & stat.S_ISUID
+
+
+def test_archive_format_is_detected_from_content_not_filename(tmp_path):
+    from app.services.archive_extractor import detect_format, extract_archive
+
+    sneaky = tmp_path / "package.tgz"  # named like a tarball, actually a zip
+    sneaky.write_bytes(make_zip({"a.txt": b"x"}))
+    assert detect_format(sneaky) == "zip"
+    assert (extract_archive(sneaky, tmp_path / "o1") / "a.txt").exists() or (tmp_path / "o1" / "a.txt").exists()
+    junk = tmp_path / "x.zip"
+    junk.write_bytes(b"not an archive")
+    with pytest.raises(ArchiveCorruptionError):
+        extract_archive(junk, tmp_path / "o2")
+
+
+def test_validate_https_url_rejects_ports_and_credentials():
+    for url in ("https://registry.npmjs.org:8443/x", "https://user:pw@registry.npmjs.org/x", "https://user@registry.npmjs.org/x"):
+        with pytest.raises(UnsupportedHostError):
+            validate_https_url(url, {"registry.npmjs.org"})
+    validate_https_url("https://registry.npmjs.org:443/x", {"registry.npmjs.org"})
+
+
+def test_lookalike_hosts_are_not_allowed():
+    for url in ("https://registry.npmjs.org.evil.com/x", "https://evilregistry.npmjs.org/x", "https://github.com.evil.io/a/b"):
+        with pytest.raises(UnsupportedHostError):
+            validate_https_url(url, {"registry.npmjs.org", "github.com"})
+
+
+@respx.mock
+async def test_redirect_to_a_non_allow_listed_host_is_refused():
+    respx.get("https://pypi.org/pypi/x/1/json").mock(return_value=httpx.Response(302, headers={"Location": "https://evil.example/steal"}))
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(UnsupportedHostError):
+            await safe_get(client, "https://pypi.org/pypi/x/1/json", {"pypi.org"})
+
+
+@respx.mock
+async def test_metadata_responses_are_size_capped(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "MAX_METADATA_BYTES", 100)
+    respx.get("https://pypi.org/pypi/big/1/json").mock(return_value=httpx.Response(200, content=b"x" * 1000))
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(DownloadError):
+            await safe_get(client, "https://pypi.org/pypi/big/1/json", {"pypi.org"})
+
+
+class _RecordingBackend:
+    def __init__(self):
+        self.connected_to = []
+
+    async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        self.connected_to.append(host)
+        return object()
+
+    async def sleep(self, seconds):
+        pass
+
+
+async def test_pinned_backend_connects_to_the_validated_ip_not_the_hostname():
+    inner = _RecordingBackend()
+    await pinned.SSRFSafeBackend(inner).connect_tcp("registry.npmjs.org", 443)
+    assert inner.connected_to == ["93.184.216.34"]  # conftest resolves every name to this public address
+
+
+async def test_pinned_backend_blocks_a_host_that_resolves_to_a_private_address(monkeypatch):
+    def rebound(host, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 443))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", rebound)
+    inner = _RecordingBackend()
+    with pytest.raises(UnsupportedHostError):
+        await pinned.SSRFSafeBackend(inner).connect_tcp("registry.npmjs.org", 443)
+    assert inner.connected_to == []  # no socket was ever opened
+
+
+async def test_pinned_backend_validates_every_address_of_a_multi_record_answer(monkeypatch):
+    def mixed(host, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 443))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", mixed)
+    with pytest.raises(UnsupportedHostError):
+        await pinned.SSRFSafeBackend(_RecordingBackend()).connect_tcp("registry.npmjs.org", 443)
+
+
+def test_outbound_client_uses_the_pinned_backend_and_ignores_proxy_env(monkeypatch):
+    from app.utils.http_client import make_client
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.internal:3128")
+    client = make_client()
+    pool = client._transport._pool
+    assert isinstance(pool._network_backend, pinned.SSRFSafeBackend)
+    assert client.follow_redirects is False and client.trust_env is False
+
+
+async def test_temp_directories_are_removed_on_success_and_on_failure(monkeypatch, tmp_path):
+    import tempfile
+    from app.services import orchestrator
+
+    created = []
+    real = tempfile.mkdtemp
+
+    def tracking(*a, **kw):
+        d = real(*a, **kw)
+        created.append(d)
+        return d
+
+    monkeypatch.setattr(tempfile, "mkdtemp", tracking)
+
+    class Boom(Exception):
+        pass
+
+    async def explode(*a, **kw):
+        raise Boom()
+
+    from app.registries import npm_registry as npm_adapter
+    monkeypatch.setattr(npm_adapter.NpmRegistry, "fetch_release", explode)
+    with pytest.raises(Boom):
+        await orchestrator.analyze_package("anything", "1.0.0")
+    assert created and not any(os.path.exists(d) for d in created)

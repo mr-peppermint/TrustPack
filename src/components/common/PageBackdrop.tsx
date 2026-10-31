@@ -4,9 +4,8 @@ import { prefersReducedMotion } from '../../lib/motion';
 
 /**
  * Landing-area backdrop, anchored at the corner formed by the sidebar and header (grid lines start on their borders): grid, cursor-lit grid and corner glow cover the first screen of the landing page
- * and scroll away with it (other routes get none). A rAF-throttled listener publishes scroll offset, scroll progress and pointer
- * position as CSS variables on <html>, so the grid, spotlight and header progress bar update without re-rendering.
- * It also feeds each `.card` its own --cx/--cy so the card highlight tracks the cursor.
+ * and scroll away with it (other routes get none). A rAF-throttled listener publishes scroll progress and pointer
+ * position as CSS variables on <html>, so the cursor-lit grid and header progress bar update without re-rendering.
  */
 export default function PageBackdrop() {
   const landing = useLocation().pathname === '/';
@@ -17,7 +16,6 @@ export default function PageBackdrop() {
     const root = document.documentElement;
     let raf = 0;
     let px = -9999, py = -9999;
-    let card: HTMLElement | null = null;
 
     const flush = () => {
       raf = 0;
@@ -27,16 +25,10 @@ export default function PageBackdrop() {
       const box = backdrop.current?.getBoundingClientRect();
       root.style.setProperty('--mx', `${px - (box?.left ?? 0)}px`);
       root.style.setProperty('--my', `${py - (box?.top ?? 0)}px`);
-      if (card) {
-        const r = card.getBoundingClientRect();
-        card.style.setProperty('--cx', `${px - r.left}px`);
-        card.style.setProperty('--cy', `${py - r.top}px`);
-      }
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(flush); };
     const onMove = (e: PointerEvent) => {
       px = e.clientX; py = e.clientY;
-      card = e.target instanceof Element ? e.target.closest<HTMLElement>('.card') : null;
       schedule();
     };
 

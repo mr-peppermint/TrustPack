@@ -24,6 +24,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    # Vite moves to 5174, 5175, ... when 5173 is busy, so any local dev port is accepted.
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],

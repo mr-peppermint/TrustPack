@@ -9,7 +9,7 @@ from app.config import settings
 from app.services.npm_registry import DistMetadata
 from app.utils.errors import IntegrityVerificationError, UpstreamTimeoutError
 from app.utils.hashing import verify_integrity
-from app.utils.http_client import safe_stream_download
+from app.utils.http_client import make_client, safe_stream_download
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,7 +29,7 @@ async def download_and_verify_tarball(dist: DistMetadata, dest_dir: Path) -> Dow
 
     last_exc: Optional[Exception] = None
     data: Optional[bytes] = None
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with make_client(timeout) as client:
         for attempt in range(settings.HTTP_MAX_RETRIES + 1):
             try:
                 data = await safe_stream_download(

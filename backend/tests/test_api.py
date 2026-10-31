@@ -88,7 +88,7 @@ def test_analyze_end_to_end_with_matching_source(tmp_path):
     assert resp.status_code == 200
     body = resp.json()
 
-    assert body["package"] == {"name": "demo-pkg", "version": "1.0.0"}
+    assert body["package"] == {"name": "demo-pkg", "version": "1.0.0", "ecosystem": "npm"}
     assert body["source"]["correspondence"] == "EXACT"
     assert body["source"]["commit"] == GIT_HEAD
     assert body["integrity"]["tarball_verified"] is True

@@ -12,8 +12,11 @@ checked against RFC1918/loopback/link-local/reserved ranges before connecting.
 """
 import ipaddress
 import os
+import shutil
 import socket
+import stat
 import tarfile
+import zipfile
 from pathlib import Path
 from typing import Iterable, List, Union
 from urllib.parse import urlparse
@@ -29,6 +32,14 @@ def validate_https_url(url: str, allowed_hosts: Iterable[str]) -> None:
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise UnsupportedHostError(f"URL must use https: {url}")
+    if parsed.username or parsed.password:
+        raise UnsupportedHostError("URLs containing credentials are not permitted")
+    try:
+        port = parsed.port
+    except ValueError:
+        raise UnsupportedHostError(f"URL has an invalid port: {url}")
+    if port not in (None, 443):
+        raise UnsupportedHostError(f"Only the default HTTPS port is permitted (got {port})")
     host = (parsed.hostname or "").lower()
     if host not in {h.lower() for h in allowed_hosts}:
         raise UnsupportedHostError(f"Host '{host}' is not in the allowed list")
@@ -126,7 +137,7 @@ def safe_extract_tar_gz(
     extracted_members = []
 
     try:
-        tar = tarfile.open(archive_path, mode="r:gz")
+        tar = tarfile.open(archive_path, mode="r:*")
     except (tarfile.TarError, OSError, EOFError) as exc:
         raise ArchiveCorruptionError(f"Could not open archive: {exc}") from exc
 
@@ -181,6 +192,11 @@ def safe_extract_tar_gz(
                     raise ArchiveSecurityError(f"Archive exceeds max total extracted size ({max_total_size} bytes)")
 
             if member.isfile() or member.isdir():
+                # Keep permission bits (the executable bit is analysis evidence) but never
+                # setuid/setgid/sticky, and never chown to archive-supplied ids.
+                member.mode = (member.mode & 0o777) | 0o600 | (0o100 if member.isdir() else 0)
+                member.uid, member.gid = os.getuid(), os.getgid()
+                member.uname = member.gname = ""
                 extracted_members.append(member)
 
         try:
@@ -189,5 +205,121 @@ def safe_extract_tar_gz(
             raise ArchiveCorruptionError(f"Failed extracting archive: {exc}") from exc
     finally:
         tar.close()
+
+    return file_count
+
+
+def _reject_unsafe_zip_name(name: str, max_path_length: int, max_path_depth: int) -> str:
+    """Return the normalized relative path for a zip entry, or raise ArchiveSecurityError."""
+    if "\x00" in name:
+        raise ArchiveSecurityError("Archive entry name contains a NUL byte")
+    if "\\" in name:
+        raise ArchiveSecurityError(f"Backslashes are not permitted in archive paths: {name!r}")
+    if len(name) > max_path_length:
+        raise ArchiveSecurityError(f"Path exceeds max length limit: {len(name)} chars")
+    if name.startswith("/") or (len(name) > 1 and name[1] == ":"):
+        raise ArchiveSecurityError(f"Absolute path in archive: {name}")
+    parts = [p for p in name.split("/") if p not in ("", ".")]
+    if any(p == ".." for p in parts):
+        raise ArchiveSecurityError(f"Path traversal attempt detected: {name}")
+    if len(parts) > max_path_depth:
+        raise ArchiveSecurityError(f"Path exceeds max nesting depth: {name}")
+    return "/".join(parts)
+
+
+def safe_extract_zip(
+    archive_path: Path,
+    dest_dir: Path,
+    *,
+    max_file_count: int,
+    max_total_size: int,
+    max_single_file_size: int,
+    max_path_depth: int = 32,
+    max_path_length: int = 4096,
+    max_compression_ratio: int = 1000,
+) -> int:
+    """Extract a .zip/.whl with the same guarantees as safe_extract_tar_gz.
+
+    Every entry is validated from the central directory BEFORE anything is
+    written: traversal / absolute / drive-letter / backslash paths, symlinks
+    and special files (from the Unix mode bits), encrypted entries, duplicate
+    names, per-file/total size, file count, nesting depth and the
+    compression ratio of large entries. Bytes are then copied with a running
+    counter, so a lying size field cannot be used to write past the limits.
+    Nothing inside the archive is ever executed or imported.
+    """
+    dest_dir = dest_dir.resolve()
+    try:
+        zf = zipfile.ZipFile(archive_path)
+    except (zipfile.BadZipFile, OSError, EOFError, NotImplementedError) as exc:
+        raise ArchiveCorruptionError(f"Could not open zip archive: {exc}") from exc
+
+    with zf:
+        infos = zf.infolist()
+        if len(infos) > max_file_count * 2:
+            raise ArchiveSecurityError(f"Archive exceeds max entry count limit ({max_file_count * 2})")
+
+        plan = []
+        seen = set()
+        file_count = 0
+        total_size = 0
+        for info in infos:
+            rel = _reject_unsafe_zip_name(info.filename, max_path_length, max_path_depth)
+            if not rel:
+                continue
+            if rel in seen:
+                raise ArchiveSecurityError(f"Duplicate archive entry (possible content smuggling): {rel}")
+            seen.add(rel)
+            target = dest_dir / rel
+            if not _is_within_directory(dest_dir, target):
+                raise ArchiveSecurityError(f"Extraction target escapes sandbox: {rel}")
+            if info.flag_bits & 0x1:
+                raise ArchiveSecurityError(f"Encrypted archive entries are not permitted: {rel}")
+
+            unix_mode = info.external_attr >> 16
+            file_type = stat.S_IFMT(unix_mode)
+            if file_type == stat.S_IFLNK:
+                raise ArchiveSecurityError(f"Symlinks are not permitted: {rel}")
+            if file_type not in (0, stat.S_IFREG, stat.S_IFDIR):
+                raise ArchiveSecurityError(f"Special files are not permitted: {rel}")
+
+            if info.is_dir():
+                plan.append((info, target, 0o755))
+                continue
+
+            if info.file_size > max_single_file_size:
+                raise ArchiveSecurityError(f"File exceeds max single-file size limit: {rel} ({info.file_size} bytes)")
+            if info.file_size > 1024 * 1024:
+                if info.compress_size == 0 or info.file_size / info.compress_size > max_compression_ratio:
+                    raise ArchiveSecurityError(f"Suspicious compression ratio (possible zip bomb): {rel}")
+            file_count += 1
+            total_size += info.file_size
+            if file_count > max_file_count:
+                raise ArchiveSecurityError(f"Archive exceeds max file count limit ({max_file_count})")
+            if total_size > max_total_size:
+                raise ArchiveSecurityError(f"Archive exceeds max total extracted size ({max_total_size} bytes)")
+            plan.append((info, target, (unix_mode & 0o777) | 0o600))
+
+        written_total = 0
+        try:
+            for info, target, mode in plan:
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                written = 0
+                with zf.open(info) as src, open(target, "wb") as dst:
+                    while True:
+                        chunk = src.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        written_total += len(chunk)
+                        if written > max_single_file_size or written_total > max_total_size:
+                            raise ArchiveSecurityError(f"Entry expanded past the configured size limits: {info.filename}")
+                        dst.write(chunk)
+                os.chmod(target, mode)
+        except (zipfile.BadZipFile, OSError, EOFError, NotImplementedError, RuntimeError, shutil.Error) as exc:
+            raise ArchiveCorruptionError(f"Failed extracting zip archive: {exc}") from exc
 
     return file_count

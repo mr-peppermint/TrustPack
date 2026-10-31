@@ -11,7 +11,7 @@ from app.utils.errors import (
     RegistryError,
     VersionNotFoundError,
 )
-from app.utils.http_client import request_with_retries
+from app.utils.http_client import make_client, request_with_retries
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -51,7 +51,7 @@ async def fetch_version_metadata(package_name: str, version: str) -> RegistryMet
     url = f"{settings.NPM_REGISTRY_URL}/{_encode_name(package_name)}/{quote(version, safe='')}"
 
     timeout = httpx.Timeout(settings.HTTP_TIMEOUT_SECONDS)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with make_client(timeout) as client:
         resp = await request_with_retries(client, url, settings.ALLOWED_TARBALL_HOSTS)
 
         if resp.status_code == 404:

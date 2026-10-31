@@ -23,12 +23,7 @@
 }
 
 @layer components {
-  .card { @apply relative rounded-xl border border-line bg-panel shadow-sm shadow-fg/[0.04]; }
-  .card::before {
-    content: ''; pointer-events: none; position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity 0.25s;
-    background: radial-gradient(260px circle at var(--cx, 50%) var(--cy, 50%), rgb(var(--accent) / 0.1), transparent 70%);
-  }
-  .card:hover::before { opacity: 1; }
+  .card { @apply rounded-xl border border-line bg-panel shadow-sm shadow-fg/[0.04]; }
   .card-hover { @apply transition duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md hover:shadow-black/20; }
   /* Fades the grid out at the bottom edge of the landing area. */
   .landing-backdrop {

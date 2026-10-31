@@ -20,11 +20,12 @@ INVALID — that determination needs no cryptography, just arithmetic.
 import base64
 import json
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import httpx
 
 from app.config import settings
-from app.utils.http_client import safe_get
+from app.utils.http_client import make_client, safe_get
 from app.utils.logging import get_logger
 from app.utils.security import validate_outbound_url
 
@@ -67,7 +68,7 @@ def _extract_slsa_claims(statement: Dict[str, Any]) -> Dict[str, Any]:
 async def _fetch_attestations(attestations_url: str) -> Optional[List[Dict[str, Any]]]:
     validate_outbound_url(attestations_url, settings.ALLOWED_TARBALL_HOSTS)
     timeout = httpx.Timeout(settings.HTTP_TIMEOUT_SECONDS)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with make_client(timeout) as client:
         resp = await safe_get(client, attestations_url, settings.ALLOWED_TARBALL_HOSTS)
         if resp.status_code != 200:
             return None
@@ -202,4 +203,126 @@ async def verify_provenance(
         "registry_signature_present": registry_signature_present,
         "detail": detail,
         "findings": [],
+    }
+
+
+# --------------------------------------------------------------------------------------------------
+# PyPI (PEP 740 attestations)
+# --------------------------------------------------------------------------------------------------
+
+_PYPI_INTEGRITY_ACCEPT = "application/vnd.pypi.integrity.v1+json"
+
+
+def _pypi_statement(attestation: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    try:
+        raw = (attestation.get("envelope") or {})["statement"]
+        statement = json.loads(base64.b64decode(raw))
+        return statement if isinstance(statement, dict) else None
+    except Exception as exc:  # noqa: BLE001 - malformed attestation degrades to "unknown", never crashes
+        logger.warning("Could not decode PyPI attestation statement: %s" % exc)
+        return None
+
+
+async def verify_pypi_provenance(
+    *,
+    project: str,
+    version: str,
+    filename: str,
+    sha256_hex: str,
+    resolved_repo_url: Optional[str],
+) -> Dict[str, Any]:
+    """Claims-level check of a PyPI publish attestation, mirroring the npm check.
+
+    PyPI publishes PEP 740 attestations (made by Trusted Publishing from GitHub Actions, GitLab...) at
+    /integrity/{project}/{version}/{file}/provenance. We cross-check what the attestation CLAIMS — the
+    attested file digest and the publishing repository — against the digest we computed ourselves and the
+    repository we resolved. We do not verify the Sigstore certificate chain or transparency-log entry, so
+    even a fully consistent attestation is reported as NOT_VERIFIED, never VERIFIED.
+    """
+    url = f"{settings.PYPI_URL.rstrip('/')}/integrity/{quote(project, safe='')}/{quote(version, safe='')}/{quote(filename, safe='')}/provenance"
+    unavailable = {
+        "provenance_status": "NOT_AVAILABLE",
+        "registry_signature_present": False,
+        "detail": (
+            "PyPI has no publish attestation for this file. This is normal: attestations are only produced "
+            "by Trusted Publishing and most releases do not have one. It says nothing about whether the "
+            "package is safe."
+        ),
+        "findings": [],
+        "claims": None,
+    }
+
+    try:
+        timeout = httpx.Timeout(settings.HTTP_TIMEOUT_SECONDS)
+        async with make_client(timeout) as client:
+            resp = await safe_get(client, url, settings.ALLOWED_PYPI_HOSTS, headers={"Accept": _PYPI_INTEGRITY_ACCEPT})
+        if resp.status_code == 404:
+            return unavailable
+        if resp.status_code != 200:
+            return {**unavailable, "provenance_status": "UNKNOWN", "detail": f"PyPI answered {resp.status_code} when asked for the attestation."}
+        data = resp.json()
+    except Exception as exc:  # noqa: BLE001 - provenance is best-effort and never fatal
+        logger.warning("PyPI provenance fetch failed: %s" % exc)
+        return {**unavailable, "provenance_status": "UNKNOWN", "detail": f"The attestation could not be retrieved or parsed ({exc})."}
+
+    bundles = data.get("attestation_bundles") if isinstance(data, dict) else None
+    if not bundles:
+        return unavailable
+
+    mismatches: List[str] = []
+    claims: Dict[str, Any] = {"publishers": [], "attested_digests": []}
+    for bundle in bundles:
+        publisher = (bundle or {}).get("publisher") or {}
+        claimed_repo = publisher.get("repository")
+        claims["publishers"].append({k: publisher.get(k) for k in ("kind", "repository", "workflow", "environment")})
+        if claimed_repo and resolved_repo_url:
+            expected = resolved_repo_url.rstrip("/").lower().split("github.com/")[-1]
+            if str(claimed_repo).lower().strip("/") != expected:
+                mismatches.append(
+                    f"The attestation says the file was published from '{claimed_repo}', but the resolved source "
+                    f"repository is '{expected}'."
+                )
+        for attestation in (bundle or {}).get("attestations") or []:
+            statement = _pypi_statement(attestation)
+            if not statement:
+                continue
+            for subject in statement.get("subject") or []:
+                digest = ((subject or {}).get("digest") or {}).get("sha256")
+                name = (subject or {}).get("name")
+                if digest:
+                    claims["attested_digests"].append(digest)
+                    if name == filename and digest.lower() != sha256_hex.lower():
+                        mismatches.append(
+                            f"Attested sha256 ({digest}) does not match the digest of the downloaded file ({sha256_hex})."
+                        )
+
+    if mismatches:
+        return {
+            "provenance_status": "INVALID",
+            "registry_signature_present": True,
+            "detail": "Attestation claims contradict independently observed facts: " + " ".join(mismatches),
+            "findings": [{
+                "rule_id": "PROVENANCE_CLAIM_MISMATCH", "file": None, "category": "provenance_claim_mismatch",
+                "severity": "HIGH", "confidence": "MEDIUM", "evidence": " ".join(mismatches),
+                "explanation": (
+                    "The publish attestation's own claims (file digest or publishing repository) contradict "
+                    "facts this analysis established independently. This is a claims-level comparison only; no "
+                    "cryptographic verification was performed."
+                ),
+                "recommendation": "Treat this release with heightened suspicion; its provenance does not match the analyzed artifact.",
+            }],
+            "claims": claims,
+        }
+
+    publisher_text = ", ".join(sorted({str(p.get("repository")) for p in claims["publishers"] if p.get("repository")})) or "an unnamed publisher"
+    return {
+        "provenance_status": "NOT_VERIFIED",
+        "registry_signature_present": True,
+        "detail": (
+            f"PyPI holds a publish attestation made by {publisher_text}; its claims are consistent with this "
+            "analysis. NOTE: the attestation's cryptographic signature chain (Sigstore certificate and "
+            "transparency log) was NOT verified here, so this is NOT_VERIFIED rather than VERIFIED."
+        ),
+        "findings": [],
+        "claims": claims,
     }

@@ -26,6 +26,11 @@ class InvalidVersionError(TrustPackError):
     code = "invalid_version"
 
 
+class UnsupportedEcosystemError(TrustPackError):
+    http_status = 422
+    code = "unsupported_ecosystem"
+
+
 class PackageNotFoundError(TrustPackError):
     http_status = 404
     code = "package_not_found"

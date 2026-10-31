@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -10,6 +10,8 @@ class ComparisonStatus(str, Enum):
     ADDED = "ADDED"
     REMOVED = "REMOVED"
     EXPECTED_GENERATED = "EXPECTED_GENERATED"
+    # Looks like build output but could not be confidently tied to the source: never treated as safe.
+    UNCERTAIN = "UNCERTAIN"
     UNEXPLAINED = "UNEXPLAINED"
 
 
@@ -57,9 +59,18 @@ class Confidence(str, Enum):
     HIGH = "HIGH"
 
 
+class Verdict(str, Enum):
+    """Final deterministic verdict. VERIFIED means 'no concerning differences were identified by the
+    implemented checks' — never 'proven safe'."""
+    VERIFIED = "VERIFIED"
+    WARNING = "WARNING"
+    HIGH_RISK = "HIGH_RISK"
+
+
 class PackageInfo(BaseModel):
     name: str
     version: str
+    ecosystem: str = "npm"
 
 
 class SourceInfo(BaseModel):
@@ -68,6 +79,20 @@ class SourceInfo(BaseModel):
     resolution_method: Optional[str] = None
     correspondence: CorrespondenceStatus = CorrespondenceStatus.NONE
     directory: Optional[str] = None
+    confidence: Optional[str] = None
+    notes: List[str] = []
+
+
+class DistributionInfo(BaseModel):
+    """The release artifact that was downloaded and analysed, and why it was chosen."""
+    kind: str  # tarball | sdist | wheel
+    filename: str
+    url: Optional[str] = None
+    sha256: Optional[str] = None
+    size: Optional[int] = None
+    selection_reason: str
+    alternatives: List[Dict[str, Any]] = []
+    published_at: Optional[str] = None
 
 
 class IntegrityInfo(BaseModel):
@@ -76,6 +101,7 @@ class IntegrityInfo(BaseModel):
     provenance_status: ProvenanceStatus = ProvenanceStatus.UNKNOWN
     registry_signature_present: Optional[bool] = None
     provenance_detail: Optional[str] = None
+    provenance_claims: Optional[Dict[str, Any]] = None
 
 
 class ComparisonSummary(BaseModel):
@@ -84,6 +110,7 @@ class ComparisonSummary(BaseModel):
     added: int = 0
     removed: int = 0
     expected_generated: int = 0
+    uncertain: int = 0
     unexplained: int = 0
 
 
@@ -95,9 +122,12 @@ class ComparisonEntry(BaseModel):
     source_size: Optional[int] = None
     published_size: Optional[int] = None
     reason: Optional[str] = None
+    # Evidence behind a generated-file classification (EXPECTED_GENERATED / UNCERTAIN).
+    evidence: List[str] = []
 
 
 class Finding(BaseModel):
+    id: Optional[str] = None
     rule_id: str
     file: Optional[str] = None
     category: str
@@ -112,12 +142,41 @@ class RiskInfo(BaseModel):
     level: RiskLevel
     score: Optional[int] = None
     rationale: List[str] = []
+    verdict: Optional[Verdict] = None
+    confidence: Optional[Confidence] = None
+
+
+class AIKeyFinding(BaseModel):
+    file: Optional[str] = None
+    explanation: str
+    severity: str
+    evidence_reference: str
+
+
+class AIExplanationContent(BaseModel):
+    summary: str
+    key_findings: List[AIKeyFinding] = []
+    recommended_actions: List[str] = []
+    limitations: List[str] = []
+
+
+class AIExplanation(BaseModel):
+    """Advisory text from the language model. Kept apart from the deterministic findings and never
+    used to compute the risk score or verdict."""
+    status: str  # ok | disabled | unavailable | invalid_response
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    content: Optional[AIExplanationContent] = None
+    error: Optional[str] = None
+    dropped_references: int = 0
 
 
 class AnalyzeResponse(BaseModel):
     report_id: str
+    created_at: Optional[float] = None
     package: PackageInfo
     source: SourceInfo
+    distribution: Optional[DistributionInfo] = None
     integrity: IntegrityInfo
     summary: ComparisonSummary
     risk: RiskInfo
@@ -125,3 +184,4 @@ class AnalyzeResponse(BaseModel):
     comparison: List[ComparisonEntry] = []
     limitations: List[str] = []
     analysis_complete: bool
+    ai_explanation: Optional[AIExplanation] = None

@@ -1,59 +1,32 @@
-"""Assembles the final report payload and maintains a bounded, time-expiring
-in-memory report store.
-
-A database is intentionally avoided for this hackathon MVP (see README).
-Reports expire after REPORT_TTL_SECONDS and are also capped at
-REPORT_RETENTION_LIMIT entries (oldest evicted first) to bound memory use
-even under a burst of requests within the TTL window.
-"""
-import threading
+"""Assembles the final report payload and persists it (see report_store)."""
 import time
 import uuid
-from collections import OrderedDict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from app.config import settings
-from app.utils.errors import ReportNotFoundError
-
-_lock = threading.Lock()
-_store: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
-_expires_at: Dict[str, float] = {}
-
-
-def _purge_expired_locked() -> None:
-    now = time.time()
-    expired_ids = [rid for rid, exp in _expires_at.items() if exp <= now]
-    for rid in expired_ids:
-        _store.pop(rid, None)
-        _expires_at.pop(rid, None)
+from app.services import report_store
 
 
 def save_report(report: Dict[str, Any]) -> str:
-    report_id = str(uuid.uuid4())
-    report["report_id"] = report_id
-    with _lock:
-        _purge_expired_locked()
-        _store[report_id] = report
-        _expires_at[report_id] = time.time() + settings.REPORT_TTL_SECONDS
-        while len(_store) > settings.REPORT_RETENTION_LIMIT:
-            oldest_id, _ = _store.popitem(last=False)
-            _expires_at.pop(oldest_id, None)
-    return report_id
+    """Assign an id + timestamp (once) and persist. Re-saving an existing report keeps its id."""
+    report.setdefault("report_id", str(uuid.uuid4()))
+    report.setdefault("created_at", time.time())
+    report_store.save(report)
+    return report["report_id"]
 
 
 def get_report(report_id: str) -> Dict[str, Any]:
-    with _lock:
-        _purge_expired_locked()
-        report = _store.get(report_id)
-    if report is None:
-        raise ReportNotFoundError(f"No report found for id '{report_id}' (it may have expired)")
-    return report
+    return report_store.get(report_id)
+
+
+def list_reports(limit: int = 100) -> List[Dict[str, Any]]:
+    return report_store.list_recent(limit)
 
 
 def build_report(
     *,
     package_name: str,
     version: str,
+    ecosystem: str = "npm",
     source_repo_url: Optional[str],
     source_commit: Optional[str],
     resolution_method: Optional[str],
@@ -70,22 +43,32 @@ def build_report(
     risk: Dict[str, Any],
     limitations: list,
     analysis_complete: bool,
+    source_confidence: Optional[str] = None,
+    source_notes: Optional[List[str]] = None,
+    distribution: Optional[Dict[str, Any]] = None,
+    provenance_claims: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    for i, finding in enumerate(findings, start=1):
+        finding.setdefault("id", "finding-%03d" % i)
     return {
-        "package": {"name": package_name, "version": version},
+        "package": {"name": package_name, "version": version, "ecosystem": ecosystem},
         "source": {
             "repository": source_repo_url,
             "commit": source_commit,
             "resolution_method": resolution_method,
             "correspondence": correspondence,
             "directory": source_directory,
+            "confidence": source_confidence,
+            "notes": source_notes or [],
         },
+        "distribution": distribution,
         "integrity": {
             "tarball_verified": tarball_verified,
             "verification_algorithm": verification_algorithm,
             "provenance_status": provenance_status,
             "registry_signature_present": registry_signature_present,
             "provenance_detail": provenance_detail,
+            "provenance_claims": provenance_claims,
         },
         "summary": summary,
         "risk": risk,
@@ -93,4 +76,5 @@ def build_report(
         "comparison": comparison_entries[:500],
         "limitations": limitations,
         "analysis_complete": analysis_complete,
+        "ai_explanation": {"status": "disabled"},
     }
