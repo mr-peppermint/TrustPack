@@ -470,3 +470,29 @@ async def test_temp_directories_are_removed_on_success_and_on_failure(monkeypatc
     with pytest.raises(Boom):
         await orchestrator.analyze_package("anything", "1.0.0")
     assert created and not any(os.path.exists(d) for d in created)
+
+
+def test_safe_extract_skips_symlinks_when_asked(tmp_path):
+    archive_path = tmp_path / "links.tgz"
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = b"print('hi')"
+        f = tarfile.TarInfo(name="repo/main.py")
+        f.size = len(data)
+        tar.addfile(f, io.BytesIO(data))
+        link = tarfile.TarInfo(name="repo/ca")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "/etc/passwd"
+        tar.addfile(link)
+    archive_path.write_bytes(buf.getvalue())
+    dest = tmp_path / "dest"
+    dest.mkdir()
+
+    skipped = []
+    count = safe_extract_tar_gz(
+        archive_path, dest, max_file_count=1000, max_total_size=10_000_000, max_single_file_size=1_000_000,
+        skipped_links=skipped,
+    )
+    assert count == 1 and skipped == ["repo/ca"]
+    assert (dest / "repo" / "main.py").is_file()
+    assert not (dest / "repo" / "ca").exists() and not (dest / "repo" / "ca").is_symlink()

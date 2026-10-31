@@ -52,9 +52,9 @@ export default function AnalysisForm({ onSubmit, loading = false }: Props) {
         <label htmlFor="ecosystem" className="label">Ecosystem</label>
         <select id="ecosystem" className="input" value={values.ecosystem} onChange={(e) => set('ecosystem', e.target.value)} disabled={loading}>
           <option value="npm">npm</option>
-          <option value="PyPI" disabled>PyPI (planned)</option>
+          <option value="PyPI">PyPI</option>
         </select>
-        <p className="mt-1.5 text-xs text-muted">The initial implementation focuses on npm packages.</p>
+        <p className="mt-1.5 text-xs text-muted">Analyze a published npm or PyPI package.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
         <div>

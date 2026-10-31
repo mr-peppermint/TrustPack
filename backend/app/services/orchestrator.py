@@ -186,7 +186,13 @@ async def analyze_package(
             source_archive_dir = tmp_root / "source"
             source_archive_dir.mkdir(parents=True, exist_ok=True)
             archive_path = await source_resolver.download_source_archive(resolution, source_archive_dir)
-            source_extracted_root = extract_archive(archive_path, tmp_root / "source_extracted")
+            source_links: list = []
+            source_extracted_root = extract_archive(archive_path, tmp_root / "source_extracted", skipped_links=source_links)
+            if source_links:
+                shown = ", ".join(source_links[:3]) + (f" and {len(source_links) - 3} more" if len(source_links) > 3 else "")
+                limitations.append(
+                    f"{len(source_links)} symlink(s) in the repository were not extracted and not compared: {shown}."
+                )
 
             source_content_root = source_extracted_root
             if source_directory:

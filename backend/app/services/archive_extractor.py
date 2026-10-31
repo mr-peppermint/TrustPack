@@ -6,6 +6,7 @@ path-traversal, symlink, special-file, size, count, depth and (for zip) compress
 before any byte is written.
 """
 from pathlib import Path
+from typing import List, Optional
 
 from app.config import settings
 from app.utils.errors import ArchiveCorruptionError
@@ -39,11 +40,14 @@ def detect_format(archive_path: Path) -> str:
     raise ArchiveCorruptionError("Unsupported or corrupted archive (not a zip, gzip, bzip2 or xz file)")
 
 
-def extract_archive(archive_path: Path, dest_dir: Path, *, unwrap: bool = True) -> Path:
+def extract_archive(
+    archive_path: Path, dest_dir: Path, *, unwrap: bool = True, skipped_links: Optional[List[str]] = None,
+) -> Path:
     """Extract an archive into dest_dir and return the content root.
 
     `unwrap=False` keeps the archive layout exactly as stored — required for wheels, whose top level
     legitimately contains several directories (package + .dist-info) and may contain just one.
+    Pass a list as `skipped_links` to skip symlinks/hardlinks (recorded in it) instead of rejecting the archive.
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     limits = dict(
@@ -54,11 +58,12 @@ def extract_archive(archive_path: Path, dest_dir: Path, *, unwrap: bool = True) 
     if detect_format(archive_path) == "zip":
         safe_extract_zip(
             archive_path, dest_dir, max_path_depth=settings.MAX_PATH_DEPTH,
-            max_path_length=settings.MAX_PATH_LENGTH, max_compression_ratio=settings.MAX_COMPRESSION_RATIO, **limits,
+            max_path_length=settings.MAX_PATH_LENGTH, max_compression_ratio=settings.MAX_COMPRESSION_RATIO,
+            skipped_links=skipped_links, **limits,
         )
     else:
         safe_extract_tar_gz(
             archive_path, dest_dir, max_path_depth=settings.MAX_PATH_DEPTH,
-            max_path_length=settings.MAX_PATH_LENGTH, **limits,
+            max_path_length=settings.MAX_PATH_LENGTH, skipped_links=skipped_links, **limits,
         )
     return _find_content_root(dest_dir) if unwrap else dest_dir

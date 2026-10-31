@@ -36,7 +36,7 @@ export default function History() {
         <select className="input sm:w-40" aria-label="Filter by ecosystem" value={eco} onChange={(e) => setEco(e.target.value)}>
           <option value="all">All ecosystems</option>
           <option value="npm">npm</option>
-          <option value="PyPI">PyPI (sample data)</option>
+          <option value="PyPI">PyPI</option>
         </select>
         <select className="input sm:w-40" aria-label="Filter by risk status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="all">All statuses</option>

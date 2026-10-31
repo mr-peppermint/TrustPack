@@ -28,6 +28,7 @@ def ai_on(monkeypatch):
     monkeypatch.setattr(settings, "AI_ENABLED", True)
     monkeypatch.setattr(settings, "AI_API_KEY", "sk-test-secret")
     monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(settings, "AI_MODEL", "openai/gpt-oss-120b")  # don't inherit the developer's .env
     monkeypatch.setattr(settings, "AI_BASE_URL", "")
     monkeypatch.setattr(settings, "AI_TIMEOUT", 5)
 

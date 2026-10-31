@@ -18,7 +18,7 @@ import stat
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Iterable, List, Union
+from typing import Iterable, List, Optional, Union
 from urllib.parse import urlparse
 
 from app.utils.errors import ArchiveCorruptionError, ArchiveSecurityError, UnsupportedHostError
@@ -114,8 +114,13 @@ def safe_extract_tar_gz(
     max_single_file_size: int,
     max_path_depth: int = 32,
     max_path_length: int = 4096,
+    skipped_links: Optional[List[str]] = None,
 ) -> int:
     """Extract a .tar.gz archive into dest_dir with strict safety checks.
+
+    Symlinks and hardlinks are rejected, unless `skipped_links` is given: then they are never created,
+    their names are appended to that list, and extraction continues (used for repository source
+    archives, where links are common and harmless once not materialised).
 
     Members are read one at a time via tar.next() rather than tar.getmembers(),
     and every size/path check happens immediately after reading each header —
@@ -175,7 +180,10 @@ def safe_extract_tar_gz(
                 raise ArchiveSecurityError(f"Extraction target escapes sandbox: {name}")
 
             if member.issym() or member.islnk():
-                raise ArchiveSecurityError(f"Symlinks/hardlinks are not permitted: {name}")
+                if skipped_links is None:
+                    raise ArchiveSecurityError(f"Symlinks/hardlinks are not permitted: {name}")
+                skipped_links.append(name)
+                continue
             if member.isdev() or member.isfifo() or member.ischr() or member.isblk():
                 raise ArchiveSecurityError(f"Special device files are not permitted: {name}")
 
@@ -237,8 +245,9 @@ def safe_extract_zip(
     max_path_depth: int = 32,
     max_path_length: int = 4096,
     max_compression_ratio: int = 1000,
+    skipped_links: Optional[List[str]] = None,
 ) -> int:
-    """Extract a .zip/.whl with the same guarantees as safe_extract_tar_gz.
+    """Extract a .zip/.whl with the same guarantees as safe_extract_tar_gz (including `skipped_links`).
 
     Every entry is validated from the central directory BEFORE anything is
     written: traversal / absolute / drive-letter / backslash paths, symlinks
@@ -279,7 +288,10 @@ def safe_extract_zip(
             unix_mode = info.external_attr >> 16
             file_type = stat.S_IFMT(unix_mode)
             if file_type == stat.S_IFLNK:
-                raise ArchiveSecurityError(f"Symlinks are not permitted: {rel}")
+                if skipped_links is None:
+                    raise ArchiveSecurityError(f"Symlinks are not permitted: {rel}")
+                skipped_links.append(rel)
+                continue
             if file_type not in (0, stat.S_IFREG, stat.S_IFDIR):
                 raise ArchiveSecurityError(f"Special files are not permitted: {rel}")
 

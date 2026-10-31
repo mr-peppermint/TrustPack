@@ -19,7 +19,7 @@ export default function NewAnalysis() {
     <div className="max-w-2xl space-y-5">
       <div>
         <h2 className="font-display text-2xl font-semibold tracking-tight">Analyze a package</h2>
-        <p className="mt-1 text-sm text-muted">Enter a published npm package and its source repository to check for unexpected differences.</p>
+        <p className="mt-1 text-sm text-muted">Enter a published npm or PyPI package and its source repository to check for unexpected differences.</p>
       </div>
       <SampleDataNotice />
       <AnalysisForm onSubmit={handleSubmit} loading={loading} />
