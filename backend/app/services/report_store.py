@@ -37,10 +37,13 @@ CREATE INDEX IF NOT EXISTS idx_reports_created ON reports (created_at DESC);
 def _connect() -> sqlite3.Connection:
     global _initialized_path
     path = settings.DATABASE_PATH
-    if path != ":memory:":
+    # "" and ":memory:" give every connection its own throwaway database, so the schema must be
+    # created on each one rather than once per path.
+    private_db = path in ("", ":memory:")
+    if not private_db:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=10)
-    if _initialized_path != path:
+    if private_db or _initialized_path != path:
         conn.executescript(_SCHEMA)
         conn.commit()
         _initialized_path = path

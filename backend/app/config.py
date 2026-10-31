@@ -58,7 +58,9 @@ class Settings:
 
     # Persistent analysis history (SQLite). Oldest reports beyond the retention limit are pruned;
     # REPORT_TTL_SECONDS=0 (default) means reports never expire by age.
-    DATABASE_PATH: str = os.getenv("DATABASE_PATH", str(_BACKEND_DIR / "data" / "trustpack.db"))
+    # An empty value (e.g. a bare `DATABASE_PATH=` in .env) falls back to the default; sqlite3 would
+    # otherwise open a fresh private temp database per connection and lose the schema.
+    DATABASE_PATH: str = os.getenv("DATABASE_PATH", "").strip() or str(_BACKEND_DIR / "data" / "trustpack.db")
     REPORT_RETENTION_LIMIT: int = int(os.getenv("REPORT_RETENTION_LIMIT", "1000"))
     REPORT_TTL_SECONDS: int = int(os.getenv("REPORT_TTL_SECONDS", "0"))
 
