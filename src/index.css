@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 244 241 235; --panel: 252 251 248; --sunken: 237 233 225; --line: 222 217 207; --fg: 31 38 42; --muted: 99 107 108;
+  --accent: 36 98 106; --on-accent: 250 248 244;
+  --ok: 58 116 88; --warn: 155 102 36; --risk: 163 59 56;
+  color-scheme: light;
+}
+.dark {
+  --bg: 20 26 29; --panel: 27 35 39; --sunken: 17 22 25; --line: 45 56 61; --fg: 226 230 228; --muted: 144 156 157;
+  --accent: 118 175 169; --on-accent: 15 22 25;
+  --ok: 126 180 150; --warn: 205 160 95; --risk: 207 122 118;
+  color-scheme: dark;
+}
+
+@layer base {
+  body { @apply bg-bg font-sans text-fg antialiased; }
+  :focus-visible { @apply outline-none ring-2 ring-accent/60; }
+}
+
+@layer components {
+  .card { @apply rounded-xl border border-line bg-panel shadow-sm shadow-fg/[0.04]; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-panel px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:bg-sunken disabled:pointer-events-none disabled:opacity-50; }
+  .btn-primary { @apply border-transparent bg-accent text-on-accent hover:bg-accent/90; }
+  .input { @apply w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-fg placeholder:text-muted/70 focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/30; }
+  .label { @apply mb-1.5 block text-sm font-medium; }
+  .eyebrow { @apply text-xs font-medium uppercase tracking-wider text-accent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
