@@ -1,5 +1,6 @@
 import { Info } from 'lucide-react';
 import SectionHeading from './SectionHeading';
+import { stagger } from '../../lib/motion';
 import StatusBadge from '../common/StatusBadge';
 import type { RiskStatus } from '../../types/analysis';
 
@@ -14,8 +15,8 @@ export default function RiskIndicators() {
     <section className="space-y-6">
       <SectionHeading eyebrow="Understanding the results" title="Three risk indicators" />
       <ul className="card divide-y divide-line">
-        {INDICATORS.map(({ status, text }) => (
-          <li key={status} className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:gap-6">
+        {INDICATORS.map(({ status, text }, i) => (
+          <li key={status} style={stagger(i)} className="stagger-item flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:gap-6">
             <div className="sm:w-32 sm:shrink-0"><StatusBadge status={status} /></div>
             <p className="text-sm leading-relaxed">{text}</p>
           </li>

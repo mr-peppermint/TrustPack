@@ -1,5 +1,6 @@
 import { BarChart3, FileText, GitCompareArrows, Hash, PackageSearch, Sparkles, TextCursorInput, type LucideIcon } from 'lucide-react';
 import SectionHeading from './SectionHeading';
+import { stagger } from '../../lib/motion';
 
 const STEPS: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: TextCursorInput, title: 'Package Input', text: 'You provide the package ecosystem, name, version, and source repository URL.' },
@@ -17,11 +18,11 @@ export default function WorkflowSection() {
       <SectionHeading eyebrow="How TrustPack works" title="From package name to report in seven steps" />
       <ol className="grid gap-7 xl:grid-cols-7 xl:gap-3">
         {STEPS.map(({ icon: Icon, title, text }, i) => (
-          <li key={title} className="relative flex gap-4 xl:flex-col xl:gap-3">
+          <li key={title} className="stagger-item relative flex gap-4 xl:flex-col xl:gap-3" style={stagger(i)}>
             {i < STEPS.length - 1 && (
               <span aria-hidden className="absolute -bottom-7 left-5 top-10 w-px bg-line xl:-right-3 xl:bottom-auto xl:left-10 xl:top-5 xl:h-px xl:w-auto" />
             )}
-            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-panel text-accent">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-panel text-accent transition duration-200 ease-out hover:z-10 hover:scale-150 hover:border-accent/60">
               <Icon className="h-[18px] w-[18px]" aria-hidden />
             </span>
             <div>

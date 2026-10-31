@@ -1,5 +1,6 @@
 import { Hash, Layout, Package, Sparkles, Terminal, type LucideIcon } from 'lucide-react';
 import SectionHeading from './SectionHeading';
+import { stagger } from '../../lib/motion';
 
 const STACK: { icon: LucideIcon; name: string; role: string }[] = [
   { icon: Layout, name: 'React + Vite', role: 'Frontend' },
@@ -14,8 +15,8 @@ export default function TechStack() {
     <section className="space-y-6">
       <SectionHeading eyebrow="Technology behind TrustPack" title="What each piece contributes" />
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {STACK.map(({ icon: Icon, name, role }) => (
-          <li key={name} className="rounded-xl border border-line bg-panel p-4">
+        {STACK.map(({ icon: Icon, name, role }, i) => (
+          <li key={name} style={stagger(i)} className="stagger-item rounded-xl border border-line bg-panel p-4">
             <Icon className="h-5 w-5 text-accent" aria-hidden />
             <p className="mt-3 font-medium">{name}</p>
             <p className="mt-0.5 text-xs leading-relaxed text-muted">{role}</p>
