@@ -16,7 +16,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-panel transition-transform lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex h-16 items-center justify-between px-5">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-on-accent">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emphasis text-on-accent shadow-md shadow-emphasis/30">
               <ShieldCheck className="h-[18px] w-[18px]" aria-hidden />
             </span>
             <span className="font-display text-lg font-semibold tracking-tight">TrustPack</span>
@@ -32,10 +32,10 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? 'bg-accent/10 font-medium text-accent' : 'text-muted hover:bg-sunken hover:text-fg'}`
+                `group flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${isActive ? 'border-accent/50 bg-accent/10 font-medium text-accent' : 'border-transparent text-muted hover:bg-sunken hover:text-fg'}`
               }
             >
-              <Icon className="h-4 w-4" aria-hidden />
+              <Icon className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" aria-hidden />
               {label}
             </NavLink>
           ))}

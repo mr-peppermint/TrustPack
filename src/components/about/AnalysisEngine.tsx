@@ -1,4 +1,5 @@
 import SectionHeading from './SectionHeading';
+import { stagger } from '../../lib/motion';
 import ComparisonIllustration from './ComparisonIllustration';
 
 const PARTS = [
@@ -16,8 +17,8 @@ export default function AnalysisEngine() {
       <SectionHeading eyebrow="Inside the analysis engine" title="Six components, one pipeline" />
       <ComparisonIllustration />
       <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-        {PARTS.map(({ title, text }) => (
-          <div key={title} className="border-t border-line pt-4">
+        {PARTS.map(({ title, text }, i) => (
+          <div key={title} style={stagger(i)} className="stagger-item border-t border-line pt-4">
             <dt className="font-medium">{title}</dt>
             <dd className="mt-1 text-sm leading-relaxed text-muted">{text}</dd>
           </div>

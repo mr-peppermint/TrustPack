@@ -16,7 +16,7 @@ export default function Reveal({ children, className = '' }: { children: ReactNo
   }, [shown]);
 
   return (
-    <div ref={ref} className={`transition duration-700 ease-out ${shown ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'} ${className}`}>
+    <div ref={ref} data-shown={shown} className={`transition duration-700 ease-out ${shown ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'} ${className}`}>
       {children}
     </div>
   );

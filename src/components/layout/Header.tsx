@@ -19,6 +19,7 @@ export default function Header({ onMenu }: { onMenu: () => void }) {
         <Menu className="h-5 w-5" />
       </button>
       <h1 className="font-display text-xl font-semibold tracking-tight">{titleFor(pathname)}</h1>
+      <div aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 origin-left bg-accent" style={{ transform: 'scaleX(var(--progress, 0))' }} />
     </header>
   );
 }

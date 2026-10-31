@@ -37,8 +37,8 @@ export default function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Total analyses" value={data.length} icon={BarChart3} />
-        <StatCard label="Verified packages" value={verified} icon={CheckCircle2} tone="ok" />
-        <StatCard label="Require attention" value={data.length - verified} icon={AlertTriangle} tone="warn" />
+        <StatCard label="Verified packages" value={verified} icon={CheckCircle2} tone="ok" delay={0.1} />
+        <StatCard label="Require attention" value={data.length - verified} icon={AlertTriangle} tone="warn" delay={0.2} />
       </div>
 
       <section className="space-y-3">

@@ -9,7 +9,7 @@ import Reveal from '../components/about/Reveal';
 export default function About() {
   return (
     <div className="space-y-14 sm:space-y-16">
-      <Reveal><AboutHero /></Reveal>
+      <AboutHero />
       <Reveal><WhyTrustPack /></Reveal>
       <Reveal><WorkflowSection /></Reveal>
       <Reveal><AnalysisEngine /></Reveal>
