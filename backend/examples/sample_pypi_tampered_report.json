@@ -1,0 +1,201 @@
+{
+  "package": {
+    "name": "demo",
+    "version": "1.0.0",
+    "ecosystem": "pypi"
+  },
+  "source": {
+    "repository": "https://github.com/acme/demo",
+    "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "resolution_method": "tag",
+    "correspondence": "INFERRED",
+    "directory": null,
+    "confidence": "MEDIUM",
+    "notes": [
+      "Matched version tag 'v1.0.0'. A tag name is a convention, not proof that the published artifact was built from it."
+    ]
+  },
+  "distribution": {
+    "kind": "sdist",
+    "filename": "demo-1.0.0.tar.gz",
+    "url": "https://files.pythonhosted.org/packages/ab/cd/demo-1.0.0.tar.gz",
+    "sha256": "9f9757be9de6224a86797ba1d78b0eae5cad2e3826d818c9b2d1675b6baf1324",
+    "size": 426,
+    "selection_reason": "Selected the source distribution: it is the artifact closest to the repository contents, so it gives the most reliable file-by-file comparison.",
+    "alternatives": [],
+    "published_at": "2026-01-02T03:04:05.000000Z"
+  },
+  "integrity": {
+    "tarball_verified": true,
+    "verification_algorithm": "sha256",
+    "provenance_status": "NOT_AVAILABLE",
+    "registry_signature_present": false,
+    "provenance_detail": "PyPI has no publish attestation for this file. This is normal: attestations are only produced by Trusted Publishing and most releases do not have one. It says nothing about whether the package is safe.",
+    "provenance_claims": null
+  },
+  "summary": {
+    "identical": 2,
+    "modified": 0,
+    "added": 2,
+    "removed": 0,
+    "expected_generated": 1,
+    "uncertain": 0,
+    "unexplained": 1
+  },
+  "risk": {
+    "level": "CRITICAL",
+    "score": 100,
+    "rationale": [
+      "Derived from 6 deduplicated, evidence-based finding(s), weighted score=100.",
+      "Source match is inferred from a version tag, not a cryptographically exact gitHead commit.",
+      "Absence of findings is not proof of safety; see the limitations."
+    ],
+    "verdict": "HIGH_RISK",
+    "confidence": "MEDIUM"
+  },
+  "findings": [
+    {
+      "rule_id": "PTH_FILE_EXECUTES_CODE",
+      "file": "demo_hook.pth",
+      "category": "install_time_code",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "evidence": "demo_hook.pth contains an 'import' line, which the Python interpreter executes at every start-up.",
+      "explanation": ".pth files are meant to list paths; a line starting with 'import' runs arbitrary code in every Python process that uses this environment. A few legitimate packages do this deliberately.",
+      "recommendation": "Read demo_hook.pth before installing; it runs without being imported.",
+      "id": "finding-001"
+    },
+    {
+      "rule_id": "UNEXPLAINED_SOURCE_DIFF",
+      "file": "src/demo/core.py",
+      "category": "unexplained_file_difference",
+      "severity": "HIGH",
+      "confidence": "MEDIUM",
+      "evidence": "File content differs between source and published package and is not explained as build output (source_sha256=2d748fe25f2542176478b701458b2650b9a5dabd66b226f1565d0745c473e915, published_sha256=2d9fde59a94c0f0c31935651212c1670254e36357ecb9f7613e38e26f9bd75a4). '.py' files are scripts/executables and are never auto-trusted as build output.",
+      "explanation": "A source-like file that differs between the repository and the published tarball, without a known build explanation, warrants manual review.",
+      "recommendation": "Diff src/demo/core.py between the resolved source commit and the published tarball.",
+      "id": "finding-002"
+    },
+    {
+      "rule_id": "ADDED_FILE_NOT_IN_SOURCE",
+      "file": "demo_hook.pth",
+      "category": "added_file_not_in_source",
+      "severity": "HIGH",
+      "confidence": "MEDIUM",
+      "evidence": "demo_hook.pth exists in the published artifact but not in the resolved source repository.",
+      "explanation": "A code or install-time file that is absent from the repository was introduced at publish time and was never reviewable in the public history.",
+      "recommendation": "Inspect demo_hook.pth and ask the maintainers why it is not in the repository.",
+      "id": "finding-003"
+    },
+    {
+      "rule_id": "ADDED_FILE_NOT_IN_SOURCE",
+      "file": "src/demo/_vendor.py",
+      "category": "added_file_not_in_source",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "evidence": "src/demo/_vendor.py exists in the published artifact but not in the resolved source repository.",
+      "explanation": "A code or install-time file that is absent from the repository was introduced at publish time and was never reviewable in the public history.",
+      "recommendation": "Inspect src/demo/_vendor.py and ask the maintainers why it is not in the repository.",
+      "id": "finding-004"
+    },
+    {
+      "rule_id": "SUSPICIOUS_CONTENT_IN_CHANGED_FILE",
+      "file": "src/demo/_vendor.py",
+      "category": "suspicious_content",
+      "severity": "HIGH",
+      "confidence": "MEDIUM",
+      "evidence": "src/demo/_vendor.py (ADDED) executes dynamically decoded data (exec/eval over base64/zlib/marshal).",
+      "explanation": "Obfuscation and dynamic code decoding in a file that differs from the repository are common in malicious packages, though some legitimate bundles show them too.",
+      "recommendation": "Read src/demo/_vendor.py in full; deobfuscate or diff it against the repository before trusting this release.",
+      "id": "finding-005"
+    },
+    {
+      "rule_id": "SUSPICIOUS_CONTENT_IN_CHANGED_FILE",
+      "file": "src/demo/core.py",
+      "category": "suspicious_content",
+      "severity": "HIGH",
+      "confidence": "MEDIUM",
+      "evidence": "src/demo/core.py (UNEXPLAINED) runs a shell command that downloads or pipes remote content.",
+      "explanation": "Obfuscation and dynamic code decoding in a file that differs from the repository are common in malicious packages, though some legitimate bundles show them too.",
+      "recommendation": "Read src/demo/core.py in full; deobfuscate or diff it against the repository before trusting this release.",
+      "id": "finding-006"
+    }
+  ],
+  "comparison": [
+    {
+      "path": "PKG-INFO",
+      "status": "EXPECTED_GENERATED",
+      "source_sha256": null,
+      "published_sha256": "eb0831022cfd432200f716c636b4025c23ab6ed3e563cf652234bf67b76be006",
+      "source_size": null,
+      "published_size": 48,
+      "reason": "PKG-INFO is generated by the sdist build",
+      "evidence": [
+        "PKG-INFO is generated by the sdist build"
+      ]
+    },
+    {
+      "path": "demo_hook.pth",
+      "status": "ADDED",
+      "source_sha256": null,
+      "published_sha256": "23c3667c91c2688bfb8f5e3d4d022e1756f1bced62be15fba4a1528cafe33654",
+      "source_size": null,
+      "published_size": 27,
+      "reason": ".pth files are processed by the Python interpreter at startup and are never treated as generated",
+      "evidence": []
+    },
+    {
+      "path": "pyproject.toml",
+      "status": "IDENTICAL",
+      "source_sha256": "2d5d13ccb03998c3184d4d3e3770237762ac372c357dbd8bbac6850381bed3e2",
+      "published_sha256": "2d5d13ccb03998c3184d4d3e3770237762ac372c357dbd8bbac6850381bed3e2",
+      "source_size": 42,
+      "published_size": 42,
+      "reason": null,
+      "evidence": []
+    },
+    {
+      "path": "src/demo/__init__.py",
+      "status": "IDENTICAL",
+      "source_sha256": "46c663463329acd7039bdef0a9145293aad32e04d7f0dd06ca2719c99f0eb014",
+      "published_sha256": "46c663463329acd7039bdef0a9145293aad32e04d7f0dd06ca2719c99f0eb014",
+      "source_size": 22,
+      "published_size": 22,
+      "reason": null,
+      "evidence": []
+    },
+    {
+      "path": "src/demo/_vendor.py",
+      "status": "ADDED",
+      "source_sha256": null,
+      "published_sha256": "0c1d5c0b10d353ba4edad202883235939e539ded84cc5d7529282020a7e42ea5",
+      "source_size": null,
+      "published_size": 53,
+      "reason": "'.py' files are scripts/executables and are never auto-trusted as build output",
+      "evidence": []
+    },
+    {
+      "path": "src/demo/core.py",
+      "status": "UNEXPLAINED",
+      "source_sha256": "2d748fe25f2542176478b701458b2650b9a5dabd66b226f1565d0745c473e915",
+      "published_sha256": "2d9fde59a94c0f0c31935651212c1670254e36357ecb9f7613e38e26f9bd75a4",
+      "source_size": 25,
+      "published_size": 81,
+      "reason": "'.py' files are scripts/executables and are never auto-trusted as build output",
+      "evidence": []
+    }
+  ],
+  "limitations": [
+    "Source match is inferred from a version tag, not an exact commit recorded by the registry.",
+    "No provenance attestation is available for this release, so who built it, and from what source, is unverified.",
+    "Static pattern scanning cannot prove intent; absence of findings does not guarantee safety.",
+    "No reproducible build was attempted; comparison is direct file-hash matching against the resolved source, not a verified rebuild.",
+    "PyPI dependency declarations and console-script entry points were not compared with the repository."
+  ],
+  "analysis_complete": true,
+  "ai_explanation": {
+    "status": "disabled"
+  },
+  "report_id": "2d8e244a-f0db-4fd6-9a39-68c796da87ca",
+  "created_at": 1793476753.133039
+}

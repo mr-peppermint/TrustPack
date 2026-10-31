@@ -1,40 +1,21 @@
 # TrustPack
 
-TrustPack is a frontend prototype for reviewing the integrity of published packages against their source repositories. It presents package comparisons, risk findings, file-level changes, and provenance details in a dashboard-style web app.
+React frontend for comparing a published npm package against its source repository. It shows a risk status, file-level differences, and provenance details. This repo contains only the frontend; the comparison backend is not included, so the app runs on built-in mock data unless you point it at an API.
 
-The current project is a React frontend. It defaults to sample data and includes an optional HTTP API integration point; package comparison, provenance verification, and AI analysis are not implemented in this repository. The hackathon proposal and team/model details are in [HACKATHON.md](HACKATHON.md).
+## Build and run
 
-## Current features
-
-- Dashboard with analysis totals and recent results.
-- Analysis form for npm package name, version, and HTTPS source repository URL.
-- Result view with risk score, findings, explanation, file changes, and provenance fields.
-- Searchable and filterable analysis history. The sample history includes npm and PyPI records.
-- Dark, light, and system theme preferences.
-- Mock analysis and result data for exploring the interface without a backend.
-- Configurable HTTP endpoints for connecting a backend.
-
-## Requirements
-
-- Node.js with npm
-
-## Run locally
+Requires Node.js 18+ and npm.
 
 ```sh
 npm install
-npm run dev
+npm run dev       # dev server (URL is printed in the terminal)
+npm run build     # type-check (tsc --noEmit) then production build to dist/
+npm run preview   # serve the production build locally
 ```
 
-Vite prints the local development URL in the terminal. To create and serve a production build:
+## Configuration
 
-```sh
-npm run build
-npm run preview
-```
-
-## Backend configuration
-
-Mock mode is enabled by default. To use the HTTP API, add a `.env.local` file in the project root:
+Mock mode is on by default. To use a real backend, create `.env.local` in the project root:
 
 ```dotenv
 VITE_USE_MOCK=false
@@ -44,54 +25,72 @@ VITE_ENDPOINT_GET_RESULT=/analyses/{id}
 VITE_ENDPOINT_HISTORY=/analyses
 ```
 
-The frontend expects these JSON responses:
+All `VITE_` values are bundled into the browser build, so never put secrets in them. The backend must allow CORS from the frontend origin.
 
-- `POST /analyses` (or the configured start endpoint), with `{ "ecosystem": "npm", "name": "...", "version": "...", "repoUrl": "..." }`; response: `{ "id": "..." }`.
-- `GET /analyses/{id}` (or the configured result endpoint); response: an `AnalysisResult` object.
-- `GET /analyses` (or the configured history endpoint); response: an array of `AnalysisSummary` objects.
+### API contract
 
-See [src/types/analysis.ts](src/types/analysis.ts) for the response shapes. The API must allow browser requests from the frontend origin. Values prefixed with `VITE_` are exposed in the browser bundle, so do not put secrets in them.
+| Call | Request | Response |
+| --- | --- | --- |
+| `POST {START_ANALYSIS}` | `{ ecosystem, name, version, repoUrl }` | `{ id }` |
+| `GET {GET_RESULT}` (`{id}` is replaced) | – | `AnalysisResult` |
+| `GET {HISTORY}` | – | `AnalysisSummary[]` |
 
-## App routes
+Response shapes are defined in `src/types/analysis.ts`.
+
+## How it works
+
+1. **Form** (`AnalysisForm`) validates the package name, version, and an `https` repository URL, then calls `startAnalysis`. Only the `npm` ecosystem can be selected.
+2. **Service** (`src/services/analysisService.ts`) is the single boundary to data. It reads the env config and either calls `src/data/mockData.ts` (mock mode) or `fetch`es the configured endpoints.
+3. **Hooks** (`src/hooks/useAnalysis.ts`) wrap the service calls and expose `data`, `loading`, `error`, and `reload` to pages.
+4. **Pages** render the result: the new analysis id navigates to `/analysis/:id`, which shows the risk summary, comparison counts, expandable file diffs, and provenance fields.
+
+### Mock mode
+
+- History and results come from in-memory data in `mockData.ts`. Entries
+  `a1`, `a2`, `a4`, `a5` have hand-written details; other entries get generated details based on their status.
+- A new submission picks a status (`verified`, `warning`, or `high_risk`) from the package name, adds it to the in-memory history, and simulates a delay. Data resets on reload.
+- A notice (`SampleDataNotice`) is shown whenever mock mode is active.
+
+### Result model
+
+- `status`: `verified` | `warning` | `high_risk`, with a 0–100 `score` and a list of `findings`.
+- `files`: each has `path`, `changeType` (`added` / `removed` / `modified` / `unchanged`), `risk` level, optional `reason` and unified-diff `diff`. The file table sorts by risk.
+- `comparison`: totals for added, removed, modified, and unchanged files.
+- `provenance`: source repo and commit, publish time, publisher, registry checksum, signature and build-provenance flags, attestation note.
+- `aiExplanation`: free-text explanation generated by the backend.
+
+### Theming and motion
+
+- Theme (`dark` / `light` / `system`) is stored in `localStorage` and applied as a `dark` class on `<html>`. Colors are CSS variables in `src/index.css`, mapped to Tailwind colors in `tailwind.config.js`.
+- The intro splash plays once per browser session and is skipped when reduced motion is requested (`src/lib/motion.ts`).
+
+## Routes
 
 | Path | Page |
 | --- | --- |
-| `/` | About TrustPack |
-| `/dashboard` | Analysis overview |
+| `/` | About |
+| `/dashboard` | Overview and recent analyses |
 | `/new` | Start an analysis |
 | `/analysis/:id` | Analysis result |
 | `/history` | Search and filter past analyses |
-| `/settings` | Theme and app configuration |
+| `/settings` | Theme and app info |
+
+`/about` redirects to `/`; unknown paths show a "Page not found" state.
 
 ## Project layout
 
 ```text
 src/
-  components/   Shared layout, analysis, dashboard, and About page UI
-  data/         In-memory mock analysis data and mock API behavior
-  hooks/        Theme and analysis data hooks
-  lib/          Formatting helpers
-  pages/        App pages
-  routes/       React Router configuration
-  services/     Mock/HTTP analysis service boundary
-  types/        Analysis request and response types
+  components/   analysis/, about/, common/, dashboard/, layout/
+  data/         mock data and mock API behavior
+  hooks/        useAnalysis, useTheme, useCountUp
+  lib/          date formatting, motion helpers
+  pages/        route pages
+  routes/       React Router config
+  services/     mock/HTTP service boundary
+  types/        request/response types
 ```
 
-## Tech stack
+## Stack
 
-- React 18 and TypeScript
-- Vite
-- React Router
-- Tailwind CSS
-- Lucide icons
-
-## Current limitations
-
-- New mock submissions create an in-memory history entry; data resets when the app reloads.
-- Mock risk outcomes are illustrative and are not computed from package contents.
-- The submission form currently supports npm only. PyPI appears in sample history and the shared types, but is disabled in the form.
-- There is no backend, registry/repository fetcher, source-to-package comparison engine, signature verifier, or model inference client in this repository.
-
-## License
-
-See [LICENSE](LICENSE).
+React 18, TypeScript, Vite 5, React Router 6, Tailwind CSS 3, lucide-react.

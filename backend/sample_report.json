@@ -1,0 +1,139 @@
+{
+  "report_id": "576f6cbc-1534-48de-b5ee-c4fc1d20d6ae",
+  "package": {
+    "name": "chart-utils",
+    "version": "2.4.0"
+  },
+  "source": {
+    "repository": "https://github.com/example-org/chart-utils",
+    "commit": "ffffffffffffffffffffffffffffffffffffffff",
+    "resolution_method": "gitHead",
+    "correspondence": "EXACT",
+    "directory": null
+  },
+  "integrity": {
+    "tarball_verified": true,
+    "verification_algorithm": "sha512",
+    "provenance_status": "NOT_AVAILABLE",
+    "registry_signature_present": true,
+    "provenance_detail": "No build provenance attestation was published for this version. This does not indicate the package is unsafe \u2014 provenance adoption is optional and most legitimate packages do not publish it. A baseline registry signature is present, which only confirms the tarball matches what the registry served, not who built it or from what source."
+  },
+  "summary": {
+    "identical": 1,
+    "modified": 0,
+    "added": 1,
+    "removed": 1,
+    "expected_generated": 1,
+    "unexplained": 2
+  },
+  "risk": {
+    "level": "HIGH",
+    "score": 44,
+    "rationale": [
+      "Derived from 4 deduplicated, evidence-based finding(s), weighted score=44."
+    ]
+  },
+  "findings": [
+    {
+      "rule_id": "LIFECYCLE_SCRIPT_PRESENT",
+      "file": "package.json",
+      "category": "lifecycle_script",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "evidence": "scripts.postinstall = \"node scripts/setup.js\"",
+      "explanation": "The 'postinstall' lifecycle script runs automatically during npm install and can execute arbitrary code on the installing machine.",
+      "recommendation": "Manually review the 'postinstall' script contents before installing."
+    },
+    {
+      "rule_id": "UNEXPLAINED_SOURCE_DIFF",
+      "file": "lib/helpers.js",
+      "category": "unexplained_file_difference",
+      "severity": "HIGH",
+      "confidence": "MEDIUM",
+      "evidence": "File content differs between source and published package and does not match any recognized build-generated pattern (source_sha256=d9bdcc4dc60d22d8240839dd88627daf20ed326de64e5bbbdcfe577d0f64a547, published_sha256=7e90470077f3b90d56c513528f4efe0e8c61b71621d04224715f9a710b175251).",
+      "explanation": "A source-like file that differs between the repository and the published tarball, without a known build explanation, warrants manual review.",
+      "recommendation": "Diff lib/helpers.js between the resolved source commit and the published tarball."
+    },
+    {
+      "rule_id": "UNEXPLAINED_SOURCE_DIFF",
+      "file": "package.json",
+      "category": "unexplained_file_difference",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "evidence": "File content differs between source and published package and does not match any recognized build-generated pattern (source_sha256=1fe514e7c62d558c22c0bd757382376d2dbad15e34476d1575ba66ea38a72950, published_sha256=b5608f3909b6502dcc059381dcd4b2256e89f872115ab07bf63eeeb8b456805d).",
+      "explanation": "A source-like file that differs between the repository and the published tarball, without a known build explanation, warrants manual review.",
+      "recommendation": "Diff package.json between the resolved source commit and the published tarball."
+    },
+    {
+      "rule_id": "DEPENDENCY_ADDED_AT_PUBLISH",
+      "file": "package.json",
+      "category": "dependency_discrepancy",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "evidence": "Dependency 'left-pad' declared in the published package but absent from source repository metadata",
+      "explanation": "A dependency present only at publish time cannot be verified against the public source history.",
+      "recommendation": "Confirm 'left-pad' was intentionally added during the release/build process."
+    }
+  ],
+  "comparison": [
+    {
+      "path": "README.md",
+      "status": "IDENTICAL",
+      "source_sha256": "3867ecf92f08b91177862ec47639bfded4bc1d7e039e11e7ded6cb03426886a0",
+      "published_sha256": "3867ecf92f08b91177862ec47639bfded4bc1d7e039e11e7ded6cb03426886a0",
+      "source_size": 42,
+      "published_size": 42,
+      "reason": null
+    },
+    {
+      "path": "dist/index.js",
+      "status": "EXPECTED_GENERATED",
+      "source_sha256": null,
+      "published_sha256": "aa850cb38c0a1869ee2a8e3df86273e7c73b168d984257baca83706f8f542d42",
+      "source_size": null,
+      "published_size": 47,
+      "reason": "path starts with 'dist/' (conventional build-output directory)"
+    },
+    {
+      "path": "lib/helpers.js",
+      "status": "UNEXPLAINED",
+      "source_sha256": "d9bdcc4dc60d22d8240839dd88627daf20ed326de64e5bbbdcfe577d0f64a547",
+      "published_sha256": "7e90470077f3b90d56c513528f4efe0e8c61b71621d04224715f9a710b175251",
+      "source_size": 38,
+      "published_size": 56,
+      "reason": null
+    },
+    {
+      "path": "package.json",
+      "status": "UNEXPLAINED",
+      "source_sha256": "1fe514e7c62d558c22c0bd757382376d2dbad15e34476d1575ba66ea38a72950",
+      "published_sha256": "b5608f3909b6502dcc059381dcd4b2256e89f872115ab07bf63eeeb8b456805d",
+      "source_size": 291,
+      "published_size": 346,
+      "reason": null
+    },
+    {
+      "path": "scripts/setup.js",
+      "status": "ADDED",
+      "source_sha256": null,
+      "published_sha256": "25cb31931a0c8f5bbcf27b9b4b443bc64507a86098f116d731407db1f8c0630c",
+      "source_size": null,
+      "published_size": 32,
+      "reason": null
+    },
+    {
+      "path": "src/index.js",
+      "status": "REMOVED",
+      "source_sha256": "b9181bea4a29329594d5c5a53bec78507fcc67ad0c5afa2a580dc51d6f19a4f7",
+      "published_sha256": null,
+      "source_size": 26,
+      "published_size": null,
+      "reason": null
+    }
+  ],
+  "limitations": [
+    "Static pattern scanning cannot prove intent; absence of findings does not guarantee safety.",
+    "No reproducible build was attempted; comparison is direct file-hash matching against the resolved source, not a verified rebuild."
+  ],
+  "analysis_complete": true
+}
