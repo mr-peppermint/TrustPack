@@ -37,6 +37,7 @@ async def trustpack_error_handler(request: Request, exc: TrustPackError) -> JSON
     return JSONResponse(
         status_code=exc.http_status,
         content={"error": {"code": exc.code, "message": exc.message}},
+        headers=exc.headers or None,
     )
 
 

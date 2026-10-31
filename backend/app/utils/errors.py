@@ -10,10 +10,11 @@ class TrustPackError(Exception):
     http_status: int = 500
     code: str = "internal_error"
 
-    def __init__(self, message: str, *, details: Optional[dict] = None):
+    def __init__(self, message: str, *, details: Optional[dict] = None, headers: Optional[dict] = None):
         super().__init__(message)
         self.message = message
         self.details = details or {}
+        self.headers = headers or {}
 
 
 class InvalidPackageNameError(TrustPackError):
@@ -95,3 +96,14 @@ class ReportNotFoundError(TrustPackError):
 class UnsupportedHostError(TrustPackError):
     http_status = 422
     code = "unsupported_host"
+
+
+class RateLimitExceededError(TrustPackError):
+    """This server's own per-IP throttle (app.utils.rate_limit) — distinct from UpstreamRateLimitError,
+    which is GitHub/the registry rate-limiting *us*."""
+    http_status = 429
+    code = "rate_limited"
+
+    def __init__(self, message: str, *, retry_after: int):
+        super().__init__(message, headers={"Retry-After": str(retry_after)})
+        self.retry_after = retry_after

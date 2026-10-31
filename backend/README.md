@@ -161,6 +161,44 @@ other device, no matter how it's addressed. To let a frontend on a different dev
 entry added if a frontend is itself opened via its device's LAN IP instead of `localhost` (e.g. to view it
 from a phone on the same network).
 
+## Deploying to the internet
+
+`uvicorn ... --reload` on your own machine is only reachable while that process and machine are running —
+not a "global backend." To make it reachable from any device, deploy it to a host that keeps a process
+running independently of your computer. [render.yaml](../render.yaml) does this for Render's free tier;
+Railway and Fly.io work the same way with their own equivalent config.
+
+1. **Push this repo to GitHub** (Render/Railway/Fly all deploy from a git repo).
+2. **Deploy the backend.** On Render: *New → Blueprint*, pick the repo — it reads `render.yaml` and builds
+   `backend/` with `pip install -r requirements.txt`, then runs
+   `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (note `--host 0.0.0.0`: the same "bind every
+   interface" requirement as the [LAN case above](#running-across-devices-on-a-lan), just over the public
+   internet instead of a LAN). It gets a stable `https://trustpack-backend.onrender.com`-style URL.
+   Add secrets (`GITHUB_TOKEN`, `AI_API_KEY`, `SUPABASE_SERVICE_KEY`, ...) in the dashboard, not in the repo.
+3. **Deploy the frontend separately** — a static site host (Vercel, Netlify, Cloudflare Pages, or Render's
+   own Static Site) fits it better than the backend's host. Build command `npm run build`, publish
+   directory `dist`, and set `VITE_API_BASE_URL` to the backend's URL from step 2 *before* building (Vite
+   bakes it into the bundle at build time — changing it after deploy needs a rebuild, not just a restart).
+4. **Point the backend's CORS at the frontend's real URL.** Set `CORS_ORIGINS` (on the backend host) to the
+   frontend's exact deployed origin, e.g. `https://your-app.vercel.app`. The built-in
+   `allow_origin_regex` in `app/main.py` only ever matches `localhost`/`127.0.0.1`, so a production
+   frontend origin that isn't in `CORS_ORIGINS` gets its requests blocked by the browser, not the server
+   (the response still comes back; the browser just won't let the page read it).
+5. Redeploy the backend after step 4 so the new `CORS_ORIGINS` value takes effect.
+
+**Before going public, know what's already in place and what isn't:**
+- There's no authentication on the API. `RATE_LIMIT_PER_MINUTE` (default 20/IP/minute, on the
+  analysis-starting endpoints only) blunts casual abuse of your `GITHUB_TOKEN`, `AI_API_KEY` and Supabase
+  quota — it is *not* a security boundary, just a throttle; a determined abuser can rotate addresses.
+  Set it to `0` to disable, or put a real API key check in front of it if you need more than a throttle.
+- **Free tiers commonly spin a web service down after ~15 minutes of no traffic** and take tens of seconds
+  to wake on the next request. If "reach it anytime" needs to mean "no cold-start delay, ever," that
+  requires a paid/always-on plan, not a free one — the free tier is "always reachable eventually within
+  one slow request," not "always warm."
+- `DATABASE_PATH`'s SQLite file and the rate limiter's in-memory counters live on that one instance; they
+  reset on every redeploy and don't survive a host migration. The Supabase cache, if configured, is the
+  only piece of state that's actually durable and shared across instances/redeploys.
+
 ## Configuration
 
 All settings are environment variables, documented with defaults in [.env.example](.env.example). The most

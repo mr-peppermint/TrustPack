@@ -79,6 +79,10 @@ class Settings:
     MAX_CONCURRENT_ANALYSES: int = int(os.getenv("MAX_CONCURRENT_ANALYSES", "3"))
     ANALYSIS_TIMEOUT_SECONDS: float = float(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "90"))
 
+    # Per-IP throttle on the analysis-starting endpoints only (app.utils.rate_limit). Blunts casual
+    # abuse of upstream quotas (GitHub, the AI provider, Supabase) once the API is public. 0 disables it.
+    RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "20"))
+
     # AI explanations (optional; the deterministic analysis never depends on them)
     AI_ENABLED: bool = _env_bool("AI_ENABLED", False)
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "groq")

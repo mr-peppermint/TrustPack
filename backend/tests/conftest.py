@@ -41,6 +41,7 @@ def _isolated_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "AI_API_KEY", "")
     monkeypatch.setattr(settings, "SUPABASE_URL", "")
     monkeypatch.setattr(settings, "SUPABASE_SERVICE_KEY", "")
+    monkeypatch.setattr(settings, "RATE_LIMIT_PER_MINUTE", 0)
 
 
 def make_tar_gz(files: Dict[str, bytes], root_dir: Optional[str] = None) -> bytes:

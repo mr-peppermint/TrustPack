@@ -63,6 +63,10 @@ useful for UI work with no backend running at all.
 
 Running the backend and frontend on **different physical devices** on the same network? See
 [backend/README.md § Running across devices on a LAN](backend/README.md#running-across-devices-on-a-lan).
+Want either one reachable from the internet, not just your own network? See
+[backend/README.md § Deploying to the internet](backend/README.md#deploying-to-the-internet) —
+[render.yaml](render.yaml) deploys the backend as a Render Blueprint; the frontend deploys separately to
+any static host (Vercel, Netlify, ...).
 
 ## Sample inputs and outputs
 
@@ -213,7 +217,8 @@ Both halves are configured entirely through environment variables, never hardcod
 | Backend | `DATABASE_PATH` | SQLite analysis history (default `backend/data/trustpack.db`) |
 | Backend | `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY` | optional AI explanations — off by default |
 | Backend | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | optional shared analysis cache — off by default |
-| Backend | `CORS_ORIGINS` | browser origins allowed to call the API |
+| Backend | `CORS_ORIGINS` | browser origins allowed to call the API (must list the deployed frontend's exact URL once public) |
+| Backend | `RATE_LIMIT_PER_MINUTE` | per-IP throttle on starting an analysis (default 20/min); matters once the API is public |
 
 Secrets (`GITHUB_TOKEN`, `AI_API_KEY`, `SUPABASE_SERVICE_KEY`) are server-side only, read from
 `backend/.env` (gitignored), and never sent to the frontend.

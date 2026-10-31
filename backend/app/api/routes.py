@@ -1,7 +1,7 @@
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.api import frontend_adapter
@@ -11,6 +11,7 @@ from app.models.response import AnalyzeResponse
 from app.services import ai_explainer, analysis_cache, orchestrator, report_generator
 from app.utils.errors import AnalysisTimeoutError
 from app.utils.logging import get_logger
+from app.utils.rate_limit import enforce_rate_limit
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -86,8 +87,8 @@ async def health() -> dict:
 
 # ----------------------------------------------------------------------------- canonical API
 
-@router.post("/api/analyze", response_model=AnalyzeResponse)
-@router.post("/analyze", response_model=AnalyzeResponse, include_in_schema=False)  # original path, kept for compatibility
+@router.post("/api/analyze", response_model=AnalyzeResponse, dependencies=[Depends(enforce_rate_limit)])
+@router.post("/analyze", response_model=AnalyzeResponse, include_in_schema=False, dependencies=[Depends(enforce_rate_limit)])  # original path, kept for compatibility
 async def analyze(request: AnalyzeRequest) -> dict:
     return await _run_analysis(request)
 
@@ -114,7 +115,7 @@ class FrontendAnalysisRequest(BaseModel):
     repoUrl: Optional[str] = ""
 
 
-@router.post("/analyses", include_in_schema=True)
+@router.post("/analyses", include_in_schema=True, dependencies=[Depends(enforce_rate_limit)])
 async def frontend_start(body: FrontendAnalysisRequest) -> Dict[str, str]:
     request = AnalyzeRequest(
         package_name=body.name, version=body.version, ecosystem=body.ecosystem, repository_url=body.repoUrl or None,

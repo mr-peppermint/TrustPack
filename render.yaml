@@ -1,0 +1,33 @@
+# Render Blueprint for the backend only (https://render.com/docs/blueprint-spec).
+# Deploy: push this repo to GitHub, then on Render: New -> Blueprint -> pick this repo.
+# The frontend is a separate static site (Vercel/Netlify/Render Static Site all work) — deploy it
+# independently and point its VITE_API_BASE_URL at this service's URL once it's live. See
+# backend/README.md "Deploying to the internet" for the full walkthrough, including why.
+services:
+  - type: web
+    name: trustpack-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # CORS_ORIGINS must list the deployed frontend's exact origin (e.g. https://your-app.vercel.app) —
+      # fill this in after the frontend has its own URL; the built-in localhost allowance doesn't cover it.
+      - key: CORS_ORIGINS
+        value: ""
+      # Secrets: left unset here (sync: false) so Render prompts for them in the dashboard instead of
+      # storing them in this file. All are optional — the service runs with every one left empty.
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
