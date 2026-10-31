@@ -3,7 +3,7 @@
 FastAPI service that answers one question for **npm** and **PyPI** packages: *does the artifact published to
 the registry correspond to the source repository it claims to come from?* It downloads the release, resolves
 the repository, compares every file by SHA-256, classifies the differences, reports provenance, and returns
-an evidence-based verdict. An optional GPT-OSS-120B step explains the result in plain language.
+an evidence-based verdict. An optional local-LLM (Ollama) step explains the result in plain language.
 
 The verdict is **deterministic**. The AI can explain it but cannot compute it, change it or add to it. A
 package with no findings is reported as "no concerning differences identified by the implemented checks" —
@@ -15,7 +15,7 @@ never as "safe".
 3. [Risk model](#risk-model)
 4. [Installation and running](#installation-and-running)
 5. [Configuration](#configuration)
-6. [GPT-OSS-120B setup](#gpt-oss-120b-setup)
+6. [Local AI explanation (Ollama)](#local-ai-explanation-ollama)
 7. [API](#api)
 8. [Connecting the React frontend](#connecting-the-react-frontend)
 9. [Testing](#testing)
@@ -43,7 +43,7 @@ flowchart TD
     REL --> PROV["Provenance check<br/>npm sigstore / PyPI PEP 740"]
     PROV --> RISK
     RISK --> DB[("SQLite history")]
-    RISK -.->|"after the verdict is stored"| AI["AI explainer<br/>GPT-OSS-120B, optional"]
+    RISK -.->|"after the verdict is stored"| AI["AI explainer<br/>local Ollama, optional"]
     AI -.->|"grounded prose only"| DB
     DB --> API
 ```
@@ -86,7 +86,7 @@ so npm and PyPI cannot drift apart in how files are hashed, compared or scored.
 11. **Verdict.** The risk engine produces level, score, verdict, confidence, findings and limitations, and
     the report is written to SQLite.
 12. **Explanation (optional).** The stored report is projected onto a bounded JSON payload and sent to
-    GPT-OSS-120B. The reply is validated, grounded in real finding ids and stored beside the report.
+    the local model. The reply is validated, grounded in real finding ids and stored beside the report.
 
 ### Generated-file evidence
 
@@ -155,31 +155,29 @@ important ones:
 | `DATABASE_PATH` | `backend/data/trustpack.db` | analysis history |
 | `REPORT_RETENTION_LIMIT` / `REPORT_TTL_SECONDS` | 1000 / 0 | pruning (0 = never expire by age) |
 | `ANALYSIS_TIMEOUT_SECONDS` | 90 | budget for the deterministic analysis |
-| `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TIMEOUT` | off / groq / `openai/gpt-oss-120b` / empty / empty / 60 | see below |
+| `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TIMEOUT` | off / ollama / `qwen2.5:7b` / empty / empty / 120 | see below |
 | `CORS_ORIGINS` | `localhost:3000,5173` | browser origins allowed to call the API |
 
-## GPT-OSS-120B setup
+## Local AI explanation (Ollama)
 
-AI is **off by default**; nothing leaves your machine until you enable it.
+AI is **off by default**. With Ollama the model runs on your Mac, so nothing leaves your machine.
 
-1. Create a key with a host that serves `openai/gpt-oss-120b` through an OpenAI-compatible API (Groq is the
-   default; OpenRouter, Together, Fireworks and OpenAI-compatible servers also work).
+1. Install and start Ollama, then pull a model: `ollama pull qwen2.5:7b` (server on `localhost:11434`).
 2. In `backend/.env`:
    ```env
    AI_ENABLED=true
-   AI_PROVIDER=groq
-   AI_MODEL=openai/gpt-oss-120b
-   AI_API_KEY=<your key>
-   AI_TIMEOUT=60
-   # AI_BASE_URL=            # optional override; https only (http allowed for localhost)
+   AI_PROVIDER=ollama
+   AI_MODEL=qwen2.5:7b
+   AI_TIMEOUT=120
+   # AI_BASE_URL=http://localhost:11434/v1   # default for ollama; no API key needed
    ```
-   For a self-hosted server (vLLM, Ollama...) set `AI_BASE_URL=http://localhost:8001/v1` and the model name it serves.
+   Hosted providers (groq, openrouter, openai...) still work: set `AI_PROVIDER`, `AI_MODEL` and `AI_API_KEY`.
 3. Restart the server. Reports now include `ai_explanation`:
 
 ```json
 {
   "status": "ok",
-  "provider": "groq", "model": "openai/gpt-oss-120b",
+  "provider": "ollama", "model": "qwen2.5:7b",
   "content": {
     "summary": "Short explanation of the analysis.",
     "key_findings": [{"file": "src/demo/_vendor.py", "explanation": "...", "severity": "high", "evidence_reference": "finding-005"}],
@@ -335,7 +333,7 @@ backend/
       provenance_checker.py     npm sigstore + PyPI PEP 740 claims checks
       risk_engine.py            findings -> score, level, verdict, confidence
       report_generator.py, report_store.py   report assembly + SQLite history
-      ai_explainer.py           optional GPT-OSS explanation
+      ai_explainer.py           optional Ollama explanation
     models/                     request / response schemas
     utils/                      security, http_client, pinned_transport, hashing, errors, logging
   tests/   examples/   requirements.txt   .env.example

@@ -285,3 +285,16 @@ def test_comparison_uses_aligned_paths():
     result = compare_manifests(src, pub, None, ecosystem="pypi", align=True)
     status = {e["path"]: e["status"] for e in result.entries}
     assert status == {"pkg/a.py": "IDENTICAL", "pkg/b.py": "UNEXPLAINED"}
+
+
+def test_setup_cfg_rewritten_by_sdist_is_recognised_as_generated(tmp_path):
+    src, pub = tmp_path / "src", tmp_path / "pub"
+    src.mkdir(), pub.mkdir()
+    (src / "setup.cfg").write_text("[tool:pytest]\nminversion=2.2.0\nflakes-ignore =\n    six.py UndefinedName\n")
+    (pub / "setup.cfg").write_text(
+        "[tool:pytest]\nminversion = 2.2.0\nflakes-ignore = \n\tsix.py UndefinedName\n\n[egg_info]\ntag_build = \ntag_date = 0\n"
+    )
+    detector = GeneratedFileDetector(ecosystem="PyPI", published_root=pub, source_root=src, artifact_kind="sdist")
+    assert detector._setup_cfg_only_adds_egg_info("setup.cfg")
+    (pub / "setup.cfg").write_text("[tool:pytest]\nminversion = 9.9\n\n[egg_info]\ntag_build = \n")
+    assert not detector._setup_cfg_only_adds_egg_info("setup.cfg")

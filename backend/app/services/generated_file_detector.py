@@ -24,6 +24,7 @@ Hard disqualifiers — the file is never auto-trusted, however it is named or lo
 This module never proves a file is benign: it records WHY a file was considered build output so a reviewer
 can challenge the rule. Reproducing the build is out of scope and is stated as a limitation of every report.
 """
+import configparser
 import json
 import re
 from dataclasses import dataclass, field
@@ -368,9 +369,24 @@ class GeneratedFileDetector:
         src = self._read(self.source_root, self.source_path_for.get(path, path))
         if pub is None or src is None:
             return False
-        stripped = re.sub(r"\n\[egg_info\][^\[]*", "\n", pub)
-        norm = lambda s: [ln.strip() for ln in s.splitlines() if ln.strip()]  # noqa: E731
-        return "[egg_info]" in pub and norm(stripped) == norm(src)
+        if "[egg_info]" not in pub:
+            return False
+
+        def settings(text: str) -> Optional[dict]:
+            # setuptools rewrites setup.cfg on sdist (spacing around '=', key order, appended
+            # [egg_info]), so compare parsed settings rather than raw lines.
+            parser = configparser.RawConfigParser(strict=False)
+            try:
+                parser.read_string(text)
+            except configparser.Error:
+                return None
+            return {
+                sec: {k: [ln.strip() for ln in v.splitlines() if ln.strip()] for k, v in parser.items(sec)}
+                for sec in parser.sections() if sec != "egg_info"
+            }
+
+        pub_settings, src_settings = settings(pub), settings(src)
+        return pub_settings is not None and pub_settings == src_settings
 
     def _cython_source_for(self, path: str) -> Optional[str]:
         stem = _stem(path)

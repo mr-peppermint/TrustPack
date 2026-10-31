@@ -68,11 +68,11 @@ class Settings:
 
     # AI explanations (optional; the deterministic analysis never depends on them)
     AI_ENABLED: bool = _env_bool("AI_ENABLED", False)
-    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "groq")
-    AI_MODEL: str = os.getenv("AI_MODEL", "openai/gpt-oss-120b")
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "ollama")
+    AI_MODEL: str = os.getenv("AI_MODEL", "qwen2.5:7b")
     AI_API_KEY: str = os.getenv("AI_API_KEY", "")
     AI_BASE_URL: str = os.getenv("AI_BASE_URL", "")
-    AI_TIMEOUT: float = float(os.getenv("AI_TIMEOUT", "60"))
+    AI_TIMEOUT: float = float(os.getenv("AI_TIMEOUT", "120"))
     AI_MAX_FINDINGS: int = int(os.getenv("AI_MAX_FINDINGS", "25"))
 
     # CORS

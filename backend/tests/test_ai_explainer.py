@@ -28,6 +28,7 @@ def ai_on(monkeypatch):
     monkeypatch.setattr(settings, "AI_ENABLED", True)
     monkeypatch.setattr(settings, "AI_API_KEY", "sk-test-secret")
     monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(settings, "AI_MODEL", "test-model")
     monkeypatch.setattr(settings, "AI_BASE_URL", "")
     monkeypatch.setattr(settings, "AI_TIMEOUT", 5)
 
@@ -49,10 +50,15 @@ async def test_disabled_returns_status_without_any_network_call():
     assert await ai_explainer.explain(REPORT) == {"status": "disabled"}
 
 
-async def test_enabled_without_key_is_unavailable(monkeypatch):
+@respx.mock
+async def test_local_ollama_needs_no_key(monkeypatch):
     monkeypatch.setattr(settings, "AI_ENABLED", True)
+    monkeypatch.setattr(settings, "AI_PROVIDER", "ollama")
+    monkeypatch.setattr(settings, "AI_MODEL", "qwen2.5:7b")
+    route = respx.post("http://localhost:11434/v1/chat/completions").mock(return_value=_reply(GOOD))
     result = await ai_explainer.explain(REPORT)
-    assert result["status"] == "unavailable" and "AI_API_KEY" in result["error"]
+    assert result["status"] == "ok" and result["provider"] == "ollama"
+    assert "authorization" not in route.calls[0].request.headers
 
 
 @respx.mock
@@ -66,7 +72,7 @@ async def test_valid_response_is_grounded_in_real_findings(ai_on):
     assert kept[0]["severity"] == "high"  # overwritten with the deterministic severity; the model said "low"
     assert kept[0]["file"] == "scripts/setup.js"
     sent = json.loads(route.calls[0].request.content)
-    assert sent["model"] == "openai/gpt-oss-120b"
+    assert sent["model"] == "test-model"
     assert route.calls[0].request.headers["authorization"] == "Bearer sk-test-secret"
     assert "sk-test-secret" not in json.dumps(sent)  # the key travels only in the header
     assert "E" * 600 not in sent["messages"][1]["content"]  # evidence is truncated before being sent

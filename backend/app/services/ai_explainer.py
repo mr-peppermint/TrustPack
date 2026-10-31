@@ -1,4 +1,4 @@
-"""Optional AI explanation of a finished analysis (GPT-OSS-120B through any OpenAI-compatible API).
+"""Optional AI explanation of a finished analysis (a local Ollama model, or any OpenAI-compatible API).
 
 The boundary is strict and enforced in code, not just in the prompt:
 
@@ -29,6 +29,7 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 PROVIDER_BASE_URLS = {
+    "ollama": "http://localhost:11434/v1",
     "groq": "https://api.groq.com/openai/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "openai": "https://api.openai.com/v1",
@@ -147,11 +148,9 @@ async def explain(report: Dict[str, Any]) -> Dict[str, Any]:
     base = {"provider": settings.AI_PROVIDER, "model": settings.AI_MODEL}
     if not settings.AI_ENABLED:
         return {"status": "disabled"}
-    if not settings.AI_API_KEY:
-        return {**base, "status": "unavailable", "error": "AI_API_KEY is not configured."}
     url = _endpoint()
     if url is None:
-        return {**base, "status": "unavailable", "error": "AI_BASE_URL/AI_PROVIDER does not resolve to a usable https endpoint."}
+        return {**base, "status": "unavailable", "error": "AI_BASE_URL/AI_PROVIDER does not resolve to a usable endpoint (https, or http on localhost)."}
 
     body = {
         "model": settings.AI_MODEL,
@@ -163,7 +162,9 @@ async def explain(report: Dict[str, Any]) -> Dict[str, Any]:
             {"role": "user", "content": json.dumps(build_payload(report), default=str)},
         ],
     }
-    headers = {"Authorization": f"Bearer {settings.AI_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+    if settings.AI_API_KEY:  # a local Ollama server needs no key
+        headers["Authorization"] = f"Bearer {settings.AI_API_KEY}"
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(settings.AI_TIMEOUT), follow_redirects=False) as client:
