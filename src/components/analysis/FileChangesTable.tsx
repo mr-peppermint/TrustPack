@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Sparkles } from 'lucide-react';
 import { RiskDot } from '../common/StatusBadge';
 import type { FileChange, RiskLevel } from '../../types/analysis';
 
@@ -46,14 +46,29 @@ export default function FileChangesTable({ files }: { files: FileChange[] }) {
                   <td className={`px-4 py-3 capitalize ${TYPE_CLS[file.changeType]}`}>{file.changeType}</td>
                   <td className="px-4 py-3"><RiskDot level={file.risk} /></td>
                 </tr>
-                {isOpen && (
-                  <tr className="border-t border-line bg-sunken/50">
-                    <td colSpan={3} className="space-y-3 px-4 py-4">
-                      <p className="text-sm text-muted">{file.reason ?? (file.changeType === 'unchanged' ? 'This file is identical in the package and the repository.' : 'No notes for this file.')}</p>
-                      {file.diff && <Diff text={file.diff} />}
-                    </td>
-                  </tr>
-                )}
+                <tr>
+                  <td colSpan={3} className="p-0">
+                    <div
+                      className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="space-y-3 border-t border-line bg-sunken/50 px-4 py-4">
+                          <p className="text-sm text-muted">{file.reason ?? (file.changeType === 'unchanged' ? 'This file is identical in the package and the repository.' : 'No notes for this file.')}</p>
+                          {file.aiNote && (
+                            <div className="flex gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5 text-sm">
+                              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+                              <div>
+                                <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-accent">AI elaboration</p>
+                                <p className="text-fg/90">{file.aiNote}</p>
+                              </div>
+                            </div>
+                          )}
+                          {file.diff && <Diff text={file.diff} />}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
               </Fragment>
             );
           })}

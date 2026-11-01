@@ -57,7 +57,8 @@ async def _run_analysis(request: AnalyzeRequest) -> Dict[str, Any]:
             )
         except asyncio.TimeoutError:
             raise AnalysisTimeoutError("Analysis exceeded the time budget")
-    await analysis_cache.store(report, request.repository_url)
+    if report.get("cacheable", True):
+        await analysis_cache.store(report, request.repository_url)
     return report
 
 

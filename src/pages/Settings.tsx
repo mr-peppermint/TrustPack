@@ -13,7 +13,6 @@ export default function Settings() {
   const info: [string, string][] = [
     ['Application', 'TrustPack frontend'],
     ['Version', '0.1.0'],
-    ['Data source', apiConfig.useMock ? 'Mock data' : 'Backend API'],
     ['API base URL', apiConfig.baseUrl || 'Not set'],
   ];
 

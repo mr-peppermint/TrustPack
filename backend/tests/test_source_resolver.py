@@ -3,7 +3,7 @@ import pytest
 import respx
 
 from app.services.source_resolver import parse_github_repository, resolve_source
-from app.utils.errors import SourceResolutionError
+from app.utils.errors import SourceResolutionError, UpstreamRateLimitError
 
 GIT_HEAD = "a" * 40
 
@@ -87,11 +87,12 @@ async def test_resolve_source_with_no_match_raises():
 
 @respx.mock
 async def test_resolve_source_github_rate_limit_is_reported_distinctly():
-    """A 403/429 from GitHub must be reported as a rate-limit condition, not
-    misreported as 'no matching tag/commit found'.
+    """A 403/429 from GitHub must be reported as a rate-limit condition (its own exception type), not
+    misreported as 'no matching tag/commit found' (SourceResolutionError) — callers rely on the
+    distinction to avoid caching a result that only looks empty because of a transient rate limit.
     """
     respx.get(f"https://api.github.com/repos/owner/repo/commits/{GIT_HEAD}").mock(return_value=httpx.Response(403))
     respx.get("https://api.github.com/repos/owner/repo/git/refs/tags/v1.0.0").mock(return_value=httpx.Response(403))
-    with pytest.raises(SourceResolutionError) as exc_info:
+    with pytest.raises(UpstreamRateLimitError) as exc_info:
         await resolve_source({"url": "https://github.com/owner/repo"}, GIT_HEAD, "1.0.0")
     assert "rate limit" in str(exc_info.value).lower()

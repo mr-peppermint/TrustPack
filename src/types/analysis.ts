@@ -21,6 +21,8 @@ export interface FileChange {
   changeType: ChangeType;
   risk: RiskLevel;
   reason?: string;
+  /** AI-generated elaboration of why this file's difference matters, grounded in a deterministic finding. */
+  aiNote?: string;
   /** Unified-diff style text. */
   diff?: string;
 }

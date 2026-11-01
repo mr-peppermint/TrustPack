@@ -345,7 +345,6 @@ The frontend expects `/analyses` endpoints and camelCase data; the backend provi
 `.env`:
 
 ```env
-VITE_USE_MOCK=false
 VITE_API_BASE_URL=http://localhost:8000
 ```
 

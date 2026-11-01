@@ -287,7 +287,7 @@ async def resolve_source(
 
     where = ", ".join(tried)
     if was_rate_limited:
-        raise SourceResolutionError(
+        raise UpstreamRateLimitError(
             f"GitHub API rate limit was hit while resolving {where}@{version}; "
             "source correspondence could not be verified (this is a rate-limit condition, not "
             "evidence that the tag/commit is absent). Set GITHUB_TOKEN to raise the rate limit."

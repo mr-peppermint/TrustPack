@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Database, ExternalLink, FileCheck, FileMinus, FilePen, FilePlus, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronRight, Database, ExternalLink, FileCheck, FileMinus, FilePen, FilePlus, XCircle } from 'lucide-react';
 import RiskSummary from '../components/analysis/RiskSummary';
 import FileChangesTable from '../components/analysis/FileChangesTable';
 import StatCard from '../components/dashboard/StatCard';
@@ -17,6 +17,7 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
 export default function AnalysisResults() {
   const { id } = useParams();
   const { data, loading, error, reload } = useAnalysisResult(id);
+  const [filesOpen, setFilesOpen] = useState(false);
 
   if (loading) return <LoadingState label="Loading results…" />;
   if (error || !data) return <ErrorState title="Results unavailable" message={error ?? 'No data was returned.'} onRetry={reload} />;
@@ -63,8 +64,23 @@ export default function AnalysisResults() {
 
       <section className="space-y-3">
         <h3 className="font-display text-xl font-semibold tracking-tight">File differences</h3>
-        <FileChangesTable files={data.files} />
-        <p className="text-xs text-muted">Select a file to see details. Unchanged files beyond those listed are counted above.</p>
+        <button
+          type="button"
+          aria-expanded={filesOpen}
+          onClick={() => setFilesOpen((v) => !v)}
+          className="card flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:border-accent/40"
+        >
+          <span>{filesOpen ? 'Hide file list' : `Show file list (${data.files.length} file${data.files.length === 1 ? '' : 's'})`}</span>
+          <ChevronRight className={`h-4 w-4 shrink-0 text-muted transition-transform ${filesOpen ? 'rotate-90' : ''}`} aria-hidden />
+        </button>
+        <div className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-in-out ${filesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+          <div className="overflow-hidden">
+            <div className="space-y-3 pt-3">
+              <FileChangesTable files={data.files} />
+              <p className="text-xs text-muted">Select a file to see details. Unchanged files beyond those listed are counted above.</p>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="space-y-3">

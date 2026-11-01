@@ -63,11 +63,25 @@ def _ai_text(report: Dict[str, Any]) -> str:
     return f"{reason} The findings above come from TrustPack's deterministic checks and are complete without it."
 
 
+def _ai_notes_by_finding(report: Dict[str, Any]) -> Dict[str, str]:
+    """Maps a finding id to the AI's grounded elaboration of it, when an AI explanation ran successfully."""
+    ai = report.get("ai_explanation") or {}
+    if ai.get("status") != "ok":
+        return {}
+    content = ai.get("content") or {}
+    return {
+        kf["evidence_reference"]: kf["explanation"]
+        for kf in (content.get("key_findings") or [])
+        if kf.get("evidence_reference") and kf.get("explanation")
+    }
+
+
 def _file_changes(report: Dict[str, Any]) -> List[Dict[str, Any]]:
     by_file: Dict[str, List[Dict[str, Any]]] = {}
     for f in report.get("findings") or []:
         if f.get("file"):
             by_file.setdefault(f["file"], []).append(f)
+    ai_notes = _ai_notes_by_finding(report)
 
     files = []
     for entry in report.get("comparison") or []:
@@ -83,6 +97,9 @@ def _file_changes(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         item: Dict[str, Any] = {"path": entry["path"], "changeType": change, "risk": risk}
         if reason:
             item["reason"] = reason
+        ai_note = ai_notes.get(related[0].get("id")) if related else None
+        if ai_note:
+            item["aiNote"] = ai_note
         files.append(item)
     files.sort(key=lambda f: (-_RISK_ORDER[f["risk"]], f["path"]))
     return files

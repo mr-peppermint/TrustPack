@@ -5,7 +5,6 @@ import AnalysisTable from '../components/analysis/AnalysisTable';
 import LoadingState from '../components/common/LoadingState';
 import ErrorState from '../components/common/ErrorState';
 import EmptyState from '../components/common/EmptyState';
-import SampleDataNotice from '../components/common/SampleDataNotice';
 import { useAnalysisHistory } from '../hooks/useAnalysis';
 
 export default function Dashboard() {
@@ -32,8 +31,6 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
-
-      <SampleDataNotice />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Total analyses" value={data.length} icon={BarChart3} />

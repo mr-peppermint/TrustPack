@@ -36,6 +36,7 @@ from app.utils.errors import (
     DownloadError,
     IntegrityVerificationError,
     SourceResolutionError,
+    UpstreamRateLimitError,
 )
 from app.utils.logging import get_logger
 
@@ -166,6 +167,7 @@ async def analyze_package(
         source_notes: List[str] = []
         summary = dict(_EMPTY_SUMMARY)
         comparison_entries: List[Dict[str, Any]] = []
+        source_resolution_rate_limited = False
 
         try:
             resolution = await source_resolver.resolve_source(
@@ -245,6 +247,10 @@ async def analyze_package(
             findings.extend(risk_engine.build_suspicious_content_findings(comparison_entries, published_root))
             findings.extend(registry.source_findings(release, source_content_root, source_manifest))
 
+        except UpstreamRateLimitError as exc:
+            logger.warning("Source resolution rate-limited for %s@%s: %s" % (package_name, version, exc))
+            limitations.append(str(exc))
+            source_resolution_rate_limited = True
         except SourceResolutionError as exc:
             logger.info("Source resolution inconclusive for %s@%s: %s" % (package_name, version, exc))
             limitations.append(str(exc))
@@ -327,6 +333,10 @@ async def analyze_package(
             source_confidence=source_confidence, source_notes=source_notes,
             distribution=_distribution_info(release),
         )
+        if source_resolution_rate_limited:
+            # A transient infrastructure condition, not a real analysis outcome: never let it sit in the
+            # shared cache and get served to other requests for the same package version.
+            report["cacheable"] = False
         report_generator.save_report(report)  # the deterministic result is durable before any AI call
 
         if settings.AI_ENABLED:

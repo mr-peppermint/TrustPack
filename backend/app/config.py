@@ -72,7 +72,7 @@ class Settings:
     SUPABASE_TIMEOUT: float = float(os.getenv("SUPABASE_TIMEOUT", "5"))
     # Cached reports older than this are ignored (0 = never expire). Bump CACHE_ENGINE_VERSION after
     # changing detection rules or scoring so older cached verdicts are no longer served.
-    CACHE_TTL_SECONDS: int = int(os.getenv("CACHE_TTL_SECONDS", str(7 * 24 * 3600)))
+    CACHE_TTL_SECONDS: int = int(os.getenv("CACHE_TTL_SECONDS", str(3600)))
     CACHE_ENGINE_VERSION: str = os.getenv("CACHE_ENGINE_VERSION", "").strip() or "1"
 
     # Concurrency / timeouts
