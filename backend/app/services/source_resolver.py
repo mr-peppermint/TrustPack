@@ -3,7 +3,9 @@ published npm version, following strict priority: gitHead > version tag >
 unresolved. Only GitHub is supported for the MVP; other hosts are rejected
 rather than guessed at.
 """
+import asyncio
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -122,11 +124,73 @@ def _github_headers() -> Dict[str, str]:
     return headers
 
 
+# Waiting longer than this for a rate limit to clear would blow the analysis time budget anyway, so a
+# wait beyond it is treated as "not worth retrying" rather than slept through.
+_MAX_RATE_LIMIT_WAIT_SECONDS = 10.0
+_MAX_GITHUB_ATTEMPTS = 3
+
+
+def _rate_limit_wait(resp: httpx.Response) -> Optional[float]:
+    """Seconds to wait before retrying `resp`, if it shows GitHub is actually rate-limiting us —
+    either the primary hourly quota or a short-lived secondary/abuse throttle. None for everything
+    else, including a plain 403: GitHub also returns 403 when the token has no access to a repository
+    (a fine-grained PAT scoped to other repos, SSO enforcement, a blocked app, ...), and retrying —
+    or telling the user to raise GITHUB_TOKEN's limit — would never fix that.
+    """
+    if resp.status_code == 429:
+        is_rate_limit = True
+    elif resp.status_code == 403:
+        if resp.headers.get("x-ratelimit-remaining") == "0":
+            is_rate_limit = True
+        else:
+            try:
+                message = str((resp.json() or {}).get("message", "")).lower()
+            except ValueError:
+                message = ""
+            is_rate_limit = "rate limit" in message or "abuse" in message
+    else:
+        return None
+    if not is_rate_limit:
+        return None
+
+    retry_after = (resp.headers.get("retry-after") or "").strip()
+    if retry_after.isdigit():
+        return float(retry_after)
+    reset = (resp.headers.get("x-ratelimit-reset") or "").strip()
+    if reset.isdigit():
+        return max(1.0, float(reset) - time.time())
+    return 2.0  # secondary/abuse limits rarely carry either header; a short default is enough
+
+
+async def _github_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """GET a GitHub API URL. A short-lived rate limit (secondary/abuse throttling, or the primary
+    quota with a near-term reset) is waited out and retried automatically; only an exhausted primary
+    quota with a far-off reset raises UpstreamRateLimitError, immediately rather than after a long
+    sleep. A non-rate-limit response (including a plain 403) is returned as-is for the caller to
+    interpret — see _rate_limit_wait.
+    """
+    resp = await safe_get(client, url, settings.ALLOWED_SOURCE_HOSTS, headers=_github_headers())
+    for attempt in range(1, _MAX_GITHUB_ATTEMPTS):
+        wait = _rate_limit_wait(resp)
+        if wait is None:
+            return resp  # not rate limited at all - whatever the status, it's final
+        if wait > _MAX_RATE_LIMIT_WAIT_SECONDS:
+            break  # rate limited, but waiting that long would blow the analysis budget - raise below
+        logger.warning(
+            "GitHub rate limited (attempt %d/%d), retrying in %.1fs: %s" % (attempt, _MAX_GITHUB_ATTEMPTS, wait, url)
+        )
+        await asyncio.sleep(wait)
+        resp = await safe_get(client, url, settings.ALLOWED_SOURCE_HOSTS, headers=_github_headers())
+    if _rate_limit_wait(resp) is not None:
+        raise UpstreamRateLimitError(f"GitHub API rate limit exceeded for {url}")
+    return resp
+
+
 async def _commit_exists(client: httpx.AsyncClient, repo: RepoRef, sha: str) -> bool:
     url = f"{settings.GITHUB_API_URL}/repos/{repo.owner}/{repo.repo}/commits/{sha}"
-    resp = await safe_get(client, url, settings.ALLOWED_SOURCE_HOSTS, headers=_github_headers())
-    if resp.status_code == 403 or resp.status_code == 429:
-        raise UpstreamRateLimitError("GitHub API rate limit exceeded while verifying commit")
+    resp = await _github_get(client, url)
+    if resp.status_code == 403:
+        logger.info("GitHub returned 403 (not rate limiting) for %s/%s; GITHUB_TOKEN may lack access to this repository." % (repo.owner, repo.repo))
     return resp.status_code == 200
 
 
@@ -136,9 +200,9 @@ async def _lookup_tag(client: httpx.AsyncClient, repo: RepoRef, tag: str) -> Opt
     is not evidence the tag exists.
     """
     url = f"{settings.GITHUB_API_URL}/repos/{repo.owner}/{repo.repo}/git/refs/tags/{quote(tag, safe='/@+')}"
-    resp = await safe_get(client, url, settings.ALLOWED_SOURCE_HOSTS, headers=_github_headers())
-    if resp.status_code == 403 or resp.status_code == 429:
-        raise UpstreamRateLimitError("GitHub API rate limit exceeded while verifying tag")
+    resp = await _github_get(client, url)
+    if resp.status_code == 403:
+        logger.info("GitHub returned 403 (not rate limiting) for %s/%s; GITHUB_TOKEN may lack access to this repository." % (repo.owner, repo.repo))
     if resp.status_code != 200:
         return None
     try:
@@ -163,7 +227,7 @@ async def _peel_to_commit(client: httpx.AsyncClient, repo: RepoRef, ref_obj: Dic
         return sha
     if kind == "tag":
         url = f"{settings.GITHUB_API_URL}/repos/{repo.owner}/{repo.repo}/git/tags/{sha}"
-        resp = await safe_get(client, url, settings.ALLOWED_SOURCE_HOSTS, headers=_github_headers())
+        resp = await _github_get(client, url)
         if resp.status_code == 200:
             try:
                 target = (resp.json().get("object") or {})

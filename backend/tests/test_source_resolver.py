@@ -1,3 +1,5 @@
+import time
+
 import httpx
 import pytest
 import respx
@@ -87,12 +89,45 @@ async def test_resolve_source_with_no_match_raises():
 
 @respx.mock
 async def test_resolve_source_github_rate_limit_is_reported_distinctly():
-    """A 403/429 from GitHub must be reported as a rate-limit condition (its own exception type), not
-    misreported as 'no matching tag/commit found' (SourceResolutionError) — callers rely on the
-    distinction to avoid caching a result that only looks empty because of a transient rate limit.
+    """A 403 that actually carries GitHub's rate-limit signal (exhausted quota, far-off reset) must be
+    reported as a rate-limit condition (its own exception type), not misreported as 'no matching
+    tag/commit found' (SourceResolutionError) — callers rely on the distinction to avoid caching a
+    result that only looks empty because of a transient rate limit.
     """
-    respx.get(f"https://api.github.com/repos/owner/repo/commits/{GIT_HEAD}").mock(return_value=httpx.Response(403))
-    respx.get("https://api.github.com/repos/owner/repo/git/refs/tags/v1.0.0").mock(return_value=httpx.Response(403))
+    far_off_reset = str(int(time.time()) + 999_999)
+    exhausted = httpx.Response(403, headers={"x-ratelimit-remaining": "0", "x-ratelimit-reset": far_off_reset})
+    respx.get(f"https://api.github.com/repos/owner/repo/commits/{GIT_HEAD}").mock(return_value=exhausted)
+    respx.get("https://api.github.com/repos/owner/repo/git/refs/tags/v1.0.0").mock(return_value=exhausted)
     with pytest.raises(UpstreamRateLimitError) as exc_info:
         await resolve_source({"url": "https://github.com/owner/repo"}, GIT_HEAD, "1.0.0")
     assert "rate limit" in str(exc_info.value).lower()
+
+
+@respx.mock
+async def test_resolve_source_plain_403_is_not_mistaken_for_rate_limit():
+    """A 403 with none of GitHub's rate-limit signals (no x-ratelimit-remaining: 0, no retry-after, no
+    rate-limit/abuse message) means the token lacks access to the repository — e.g. a fine-grained PAT
+    scoped to other repos. That is never fixed by retrying or by a bigger quota, so it must not be
+    reported as a rate limit; resolution should just move on and conclude normally.
+    """
+    bare_403 = httpx.Response(403)  # no headers, no body - exactly what a scope/permission 403 looks like
+    respx.get(f"https://api.github.com/repos/owner/repo/commits/{GIT_HEAD}").mock(return_value=bare_403)
+    for tag in ("v1.0.0", "1.0.0"):
+        respx.get(f"https://api.github.com/repos/owner/repo/git/refs/tags/{tag}").mock(return_value=bare_403)
+    with pytest.raises(SourceResolutionError) as exc_info:
+        await resolve_source({"url": "https://github.com/owner/repo"}, GIT_HEAD, "1.0.0")
+    assert "rate limit" not in str(exc_info.value).lower()
+
+
+@respx.mock
+async def test_resolve_source_retries_transient_rate_limit_and_succeeds():
+    """A short-lived secondary/abuse rate limit (small retry-after, well within the wait budget) is
+    waited out and retried automatically instead of failing the whole analysis."""
+    throttled = httpx.Response(403, headers={"retry-after": "0"}, json={"message": "You have exceeded a secondary rate limit."})
+    ok = httpx.Response(200)
+    route = respx.get(f"https://api.github.com/repos/owner/repo/commits/{GIT_HEAD}")
+    route.side_effect = [throttled, ok]
+
+    resolution = await resolve_source({"url": "https://github.com/owner/repo"}, GIT_HEAD, "1.0.0")
+    assert resolution.resolution_method == "gitHead"
+    assert route.call_count == 2
