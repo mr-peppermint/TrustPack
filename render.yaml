@@ -15,10 +15,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.7"
-      # CORS_ORIGINS must list the deployed frontend's exact origin (e.g. https://your-app.vercel.app) —
-      # fill this in after the frontend has its own URL; the built-in localhost allowance doesn't cover it.
+      # Keep each deployed frontend origin here, with no trailing slash.
       - key: CORS_ORIGINS
-        value: ""
+        value: "https://trustpack-46y.pages.dev,https://trustpack.dpdns.org"
       # Secrets: left unset here (sync: false) so Render prompts for them in the dashboard instead of
       # storing them in this file. All are optional — the service runs with every one left empty.
       - key: GITHUB_TOKEN

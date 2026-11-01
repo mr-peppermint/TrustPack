@@ -179,9 +179,10 @@ Railway and Fly.io work the same way with their own equivalent config.
    own Static Site) fits it better than the backend's host. Build command `npm run build`, publish
    directory `dist`, and set `VITE_API_BASE_URL` to the backend's URL from step 2 *before* building (Vite
    bakes it into the bundle at build time — changing it after deploy needs a rebuild, not just a restart).
-4. **Point the backend's CORS at the frontend's real URL.** Set `CORS_ORIGINS` (on the backend host) to the
-   frontend's exact deployed origin, e.g. `https://your-app.vercel.app`. The built-in
-   `allow_origin_regex` in `app/main.py` only ever matches `localhost`/`127.0.0.1`, so a production
+4. **Point the backend's CORS at the frontend's real URL.** Set `CORS_ORIGINS` (on the backend host) to each
+   frontend's exact deployed origin, e.g. `https://your-app.vercel.app,https://your-custom-domain.example`.
+   The repo's `render.yaml` currently allows `https://trustpack-46y.pages.dev` and `https://trustpack.dpdns.org`.
+   The built-in `allow_origin_regex` in `app/main.py` only ever matches `localhost`/`127.0.0.1`, so a production
    frontend origin that isn't in `CORS_ORIGINS` gets its requests blocked by the browser, not the server
    (the response still comes back; the browser just won't let the page read it).
 5. Redeploy the backend after step 4 so the new `CORS_ORIGINS` value takes effect.
