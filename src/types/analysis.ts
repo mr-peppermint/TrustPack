@@ -27,11 +27,21 @@ export interface FileChange {
   diff?: string;
 }
 
+export interface FindingDetail {
+  /** Short evidence line, shown by default. */
+  summary: string;
+  risk: RiskLevel;
+  /** Why this finding matters, shown only when the user expands it. */
+  explanation?: string;
+  /** What to do about it, shown only when the user expands it. */
+  recommendation?: string;
+}
+
 export interface RiskAssessment {
   status: RiskStatus;
   /** 0 (no concern) to 100 (severe). */
   score: number;
-  findings: string[];
+  findings: FindingDetail[];
 }
 
 export interface Provenance {

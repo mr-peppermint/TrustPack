@@ -1,8 +1,8 @@
 """Projects stored reports onto the shapes the React frontend already consumes.
 
-The frontend (src/types/analysis.ts) uses camelCase, three risk statuses and string findings. The
-backend's own report is richer; this module is a pure, lossy projection of it — it never recomputes
-anything, so the verdict the UI shows is always the deterministic one.
+The frontend (src/types/analysis.ts) uses camelCase and three risk statuses. The backend's own report
+is richer; this module is a pure, lossy projection of it — it never recomputes anything, so the verdict
+the UI shows is always the deterministic one.
 """
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -44,6 +44,17 @@ def _finding_line(finding: Dict[str, Any]) -> str:
     where = f"{finding['file']}: " if finding.get("file") else ""
     text = f"{where}{finding.get('evidence') or finding.get('explanation') or finding.get('rule_id')}"
     return text if len(text) <= 300 else text[:299] + "…"
+
+
+def _finding_detail(finding: Dict[str, Any]) -> Dict[str, Any]:
+    """A compact summary line plus the deterministic 'why it matters' / 'what to do' text, kept apart so
+    the frontend can show the summary by default and reveal the rest only when the user asks for it."""
+    item: Dict[str, Any] = {"summary": _finding_line(finding), "risk": _FILE_RISK.get(finding.get("severity"), "low")}
+    if finding.get("explanation"):
+        item["explanation"] = finding["explanation"]
+    if finding.get("recommendation"):
+        item["recommendation"] = finding["recommendation"]
+    return item
 
 
 def _ai_text(report: Dict[str, Any]) -> str:
@@ -120,7 +131,7 @@ def to_result(report: Dict[str, Any]) -> Dict[str, Any]:
         "risk": {
             "status": status_of(report),
             "score": int((report.get("risk") or {}).get("score") or 0),
-            "findings": [_finding_line(f) for f in findings[:10]],
+            "findings": [_finding_detail(f) for f in findings[:10]],
         },
         "aiExplanation": _ai_text(report),
         "comparison": {
