@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AnalysisForm from '../components/analysis/AnalysisForm';
 import ErrorState from '../components/common/ErrorState';
 import ProgressBar from '../components/common/ProgressBar';
+import { apiConfig, health } from '../services/analysisService';
 import { useStartAnalysis, useAnalysisProgress } from '../hooks/useAnalysis';
 import { useStartupStatus } from '../hooks/useStartupStatus';
 import type { AnalysisRequest } from '../types/analysis';
@@ -12,6 +13,26 @@ export default function NewAnalysis() {
 
   // Backend boot progress (non-blocking: the form still loads below).
   const { ready, checking, progress: startupProgress } = useStartupStatus();
+  const [wakingBackend, setWakingBackend] = useState(false);
+  const [wakeMessage, setWakeMessage] = useState<string | null>(null);
+
+  const healthUrl = new URL(
+    apiConfig.endpoints.health,
+    apiConfig.baseUrl || window.location.origin,
+  ).toString();
+
+  const wakeBackend = async () => {
+    setWakingBackend(true);
+    setWakeMessage(null);
+    try {
+      const result = await health();
+      setWakeMessage(`Backend responded: ${result.status}. Startup progress will update automatically.`);
+    } catch (error) {
+      setWakeMessage(`${(error as Error).message || 'The request did not complete.'} The backend may still be starting; progress will keep updating.`);
+    } finally {
+      setWakingBackend(false);
+    }
+  };
 
   const { start, error: startError, loading: startLoading } = useStartAnalysis();
   const [analysisId, setAnalysisId] = useState<string | null>(null);
@@ -90,9 +111,18 @@ export default function NewAnalysis() {
             stage={startupProgress?.phase}
           />
           {!startupProgress?.ready && (
-            <p className="mt-2 text-xs text-muted">
-              The TrustPack backend is starting up. The form below is disabled until it is ready.
-            </p>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-muted">
+                The TrustPack backend is starting up. The form below is disabled until it is ready.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn text-xs" onClick={wakeBackend} disabled={wakingBackend}>
+                  {wakingBackend ? 'Sending request…' : 'Wake backend'}
+                </button>
+                <code className="break-all text-xs text-muted">GET {healthUrl}</code>
+              </div>
+              {wakeMessage && <p role="status" className="text-xs text-muted">{wakeMessage}</p>}
+            </div>
           )}
         </div>
       )}
