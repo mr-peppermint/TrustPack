@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import respx
 from fastapi.testclient import TestClient
@@ -77,13 +78,30 @@ def test_registry_failure_is_502():
 
 
 @respx.mock
-def test_frontend_contract_matches_src_types_analysis_ts():
+async def test_frontend_contract_matches_src_types_analysis_ts():
+    """The frontend contract starts an analysis in the background and reports progress, so the client
+    polls /analyses/{id}/progress until done before reading the result."""
     _mock_pypi("demo", "1.0")
-    started = client.post("/analyses", json={"ecosystem": "PyPI", "name": "demo", "version": "1.0", "repoUrl": ""})
-    assert started.status_code == 200
-    analysis_id = started.json()["id"]
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as ac:
+        started = await ac.post("/analyses", json={"ecosystem": "PyPI", "name": "demo", "version": "1.0", "repoUrl": ""})
+        assert started.status_code == 200
+        analysis_id = started.json()["id"]
 
-    result = client.get(f"/analyses/{analysis_id}").json()
+        # Poll progress until the background analysis finishes.
+        status = None
+        snap = {}
+        for _ in range(200):
+            snap = await ac.get(f"/analyses/{analysis_id}/progress")
+            assert snap.status_code == 200, snap.json()
+            status = snap.json()["status"]
+            if status in ("done", "failed"):
+                break
+            await asyncio.sleep(0.025)
+        assert status == "done", snap
+
+        result = (await ac.get(f"/analyses/{analysis_id}")).json()
     assert set(result) == {"id", "package", "sourceRepo", "status", "createdAt", "risk", "aiExplanation", "comparison", "files", "provenance", "fromCache"}
     assert result["fromCache"] is False
     assert result["package"] == {"name": "demo", "ecosystem": "PyPI", "version": "1.0"}

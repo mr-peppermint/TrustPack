@@ -81,3 +81,25 @@ export interface AnalysisResult extends AnalysisSummary {
   /** True when this result was served from the shared cache instead of a fresh analysis. */
   fromCache?: boolean;
 }
+
+/** Progress reported by the backend while it boots up. */
+export interface StartupProgress {
+  phase: string;
+  percent: number;
+  message: string;
+  ready: boolean;
+  startedAt?: number;
+}
+
+/** Progress reported by the backend while a single analysis runs. */
+export interface AnalysisProgress {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  percent: number;
+  stage: string;
+  message: string;
+  createdAt: number;
+  finishedAt?: number | null;
+  error?: string | null;
+  errorCode?: string | null;
+}

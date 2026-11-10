@@ -1,15 +1,18 @@
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError
 
 from app.api import frontend_adapter
 from app.config import settings
 from app.models.request import AnalyzeRequest
 from app.models.response import AnalyzeResponse
 from app.services import ai_explainer, analysis_cache, orchestrator, report_generator
-from app.utils.errors import AnalysisTimeoutError
+from app.services.progress import analysis_progress
+from app.startup_progress import startup
+from app.utils.errors import AnalysisTimeoutError, TrustPackError
 from app.utils.logging import get_logger
 from app.utils.rate_limit import enforce_rate_limit
 
@@ -60,6 +63,69 @@ async def _run_analysis(request: AnalyzeRequest) -> Dict[str, Any]:
     if report.get("cacheable", True):
         await analysis_cache.store(report, request.repository_url)
     return report
+
+
+# ----------------------------------------------------------------------------- analysis progress (frontend contract)
+
+async def _execute_analysis(request: AnalyzeRequest, analysis_id: str) -> None:
+    """Runs one analysis in the background and reports progress to `analysis_progress`.
+
+    Separate from `_run_analysis` (used by the canonical /api/analyze path) so the
+    frontend contract can start an analysis and stream its progress to the browser.
+
+    The report is re-saved under `analysis_id` (the id handed to the frontend) so
+    that GET /analyses/{id} can find it as soon as progress reports done.
+    """
+    prog = analysis_progress.get(analysis_id)
+    try:
+        report = await _serve_cached(request)
+        if report is None:
+            budget = settings.ANALYSIS_TIMEOUT_SECONDS + (settings.AI_TIMEOUT + 2 if settings.AI_ENABLED else 0)
+            async with _semaphore:
+                report = await asyncio.wait_for(
+                    orchestrator.analyze_package(
+                        request.package_name, request.version,
+                        ecosystem=request.ecosystem, repository_url=request.repository_url,
+                        progress=prog,
+                    ),
+                    timeout=budget,
+                )
+        # Canonicalize to the id the client was given so the result endpoint can
+        # locate the report immediately once progress reports "done".
+        report["report_id"] = analysis_id
+        report_generator.save_report(report)
+        if prog is not None:
+            prog.update(100, "done", "Served from cache" if report.get("cache") else "Analysis complete")
+            prog.mark_done()
+    except asyncio.TimeoutError:
+        if prog is not None:
+            prog.mark_failed("Analysis exceeded the time budget", "analysis_timeout")
+    except TrustPackError as exc:
+        logger.info("Analysis %s failed (%s): %s", analysis_id, exc.code, exc.message)
+        if prog is not None:
+            prog.mark_failed(exc.message, exc.code)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the frontend via the progress endpoint
+        logger.exception("Analysis %s failed", analysis_id)
+        if prog is not None:
+            prog.mark_failed("An unexpected error interrupted the analysis. Please try again.", "internal_error")
+
+
+@router.get("/api/startup-progress")
+@router.get("/startup-progress")
+async def startup_progress_endpoint() -> dict:
+    return startup.snapshot()
+
+
+@router.get("/api/analyses/{analysis_id}/progress")
+@router.get("/analyses/{analysis_id}/progress")
+async def analysis_progress_endpoint(analysis_id: str) -> dict:
+    snap = analysis_progress.snapshot(analysis_id)
+    if snap is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "analysis_not_found", "message": "No analysis with that id was started."},
+        )
+    return snap
 
 
 def _history_item(report: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,11 +184,25 @@ class FrontendAnalysisRequest(BaseModel):
 
 @router.post("/analyses", include_in_schema=True, dependencies=[Depends(enforce_rate_limit)])
 async def frontend_start(body: FrontendAnalysisRequest) -> Dict[str, str]:
-    request = AnalyzeRequest(
-        package_name=body.name, version=body.version, ecosystem=body.ecosystem, repository_url=body.repoUrl or None,
-    )
-    report = await _run_analysis(request)
-    return {"id": report["report_id"]}
+    try:
+        request = AnalyzeRequest(
+            package_name=body.name, version=body.version, ecosystem=body.ecosystem, repository_url=body.repoUrl or None,
+        )
+    except ValidationError as exc:
+        fields = {str(err.get("loc", [""])[-1]) for err in exc.errors()}
+        error_text = " ".join(str(err.get("msg", "")) for err in exc.errors()).lower()
+        if "package_name" in fields or "package_name" in error_text:
+            code, message = "invalid_package_name", "Enter a valid package name for the selected ecosystem."
+        elif "version" in fields or "version" in error_text:
+            code, message = "invalid_version", "Enter an exact version in the format used by the selected ecosystem."
+        elif "repository_url" in fields or "repository_url" in error_text:
+            code, message = "unsupported_host", "Enter a GitHub repository URL such as https://github.com/owner/repo."
+        else:
+            code, message = "validation_error", "Check the package name, exact version, and repository link."
+        return JSONResponse(status_code=422, content={"error": {"code": code, "message": message}})
+    analysis_id = analysis_progress.create()
+    asyncio.create_task(_execute_analysis(request, analysis_id))
+    return {"id": analysis_id}
 
 
 @router.get("/analyses")

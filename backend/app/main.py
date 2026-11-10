@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager, closing
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -6,11 +7,35 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import router
 from app.config import settings
+from app.startup_progress import startup
 from app.utils.errors import TrustPackError
 from app.utils.logging import configure_logging, get_logger
 
 configure_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Run boot phases while the server starts, reporting progress to the frontend.
+
+    The frontend polls /api/startup-progress while the backend appears offline or
+    is still booting, and shows a determinate startup progress bar until the
+    backend reports ready.
+    """
+    startup.advance("loading-config", 20, "Loading configuration…")
+    startup.advance("connecting-database", 50, "Opening history database…")
+    try:
+        from app.services.report_store import _connect
+
+        with closing(_connect()) as _conn:  # ensure the schema exists before clients connect
+            pass
+    except Exception:  # pragma: no cover - warm-up must never block startup
+        logger.warning("History database warm-up skipped")
+    startup.advance("warming-cache", 80, "Warming analysis cache…")
+    startup.mark_ready()
+    yield
+
 
 app = FastAPI(
     title="TrustPack API",
@@ -19,6 +44,7 @@ app = FastAPI(
         "source repository and surfaces evidence-based, explainable risk findings."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

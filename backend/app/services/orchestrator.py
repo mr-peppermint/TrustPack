@@ -49,6 +49,16 @@ _EMPTY_SUMMARY = {
 _PLACEHOLDER_VERSIONS = {"", "0.0.0", "0.0.0-development", "0.0.0-semantic-release", "0.0.0-dev", "1.0.0-dev"}
 
 
+def _tick(progress: Any, percent: int, stage: str, message: str) -> None:
+    """Report pipeline progress to the frontend without ever failing the analysis."""
+    if progress is None:
+        return
+    try:
+        progress.update(percent, stage, message)
+    except Exception:  # pragma: no cover - progress reporting is best-effort
+        logger.exception("Progress update failed for stage %s", stage)
+
+
 def _read_json(path: Path) -> Optional[Dict[str, Any]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
@@ -108,12 +118,14 @@ async def analyze_package(
     version: str,
     ecosystem: str = "npm",
     repository_url: Optional[str] = None,
+    progress: Any = None,
 ) -> Dict[str, Any]:
     registry = get_registry(ecosystem)
     ecosystem = registry.ecosystem
     tmp_root = Path(tempfile.mkdtemp(prefix="trustpack_"))
     limitations: List[str] = []
     try:
+        _tick(progress, 0, "queued", "Queued")
         try:
             release = await registry.fetch_release(package_name, version, tmp_root / "download")
         except IntegrityVerificationError as exc:
@@ -126,6 +138,7 @@ async def analyze_package(
 
         artifact = release.artifact
         limitations.extend(release.notes)
+        _tick(progress, 14, "fetching-release", "Fetched published release")
 
         # ---- extract + inventory the published artifact -----------------------------------------
         try:
@@ -156,6 +169,7 @@ async def analyze_package(
         published_manifest = manifest_generator.generate_manifest(published_root)
         published_package_json = registry.published_package_json(release, published_root)
         findings: List[Dict[str, Any]] = registry.static_findings(release, published_root, published_manifest)
+        _tick(progress, 28, "extracting", "Extracted package archive")
 
         # ---- source resolution + comparison ------------------------------------------------------
         source_repo_url = None
@@ -259,6 +273,8 @@ async def analyze_package(
             correspondence = "NONE"
             limitations.append(f"Source archive could not be safely processed: {exc}")
 
+        _tick(progress, 45, "resolving-source", "Resolved and compared source")
+
         # ---- provenance --------------------------------------------------------------------------
         try:
             provenance = await registry.verify_provenance(release, source_repo_url, source_commit)
@@ -272,6 +288,8 @@ async def analyze_package(
             }
         findings.extend(provenance.get("findings", []))
 
+        _tick(progress, 70, "provenance", "Verified provenance")
+
         # ---- deterministic verdict ---------------------------------------------------------------
         changed = sum(v for k, v in summary.items() if k != "identical")
         risk = risk_engine.compute_risk(
@@ -282,6 +300,8 @@ async def analyze_package(
             uncertain_count=summary.get("uncertain", 0),
             changed_count=changed,
         )
+
+        _tick(progress, 88, "scoring", "Computed risk score")
 
         # ---- limitations -------------------------------------------------------------------------
         if correspondence == "NONE":
@@ -342,6 +362,7 @@ async def analyze_package(
         if settings.AI_ENABLED:
             report["ai_explanation"] = await ai_explainer.explain(report)
             report_generator.save_report(report)
+        _tick(progress, 100, "done", "Analysis complete")
         return report
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
