@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 import httpx
 
@@ -96,7 +96,27 @@ def parse_github_repository(repository_field: Any, *, allow_shorthand: bool = Tr
         m = pattern.match(url)
         if m and _valid_ref_part(m.group(1), m.group(2)):
             return RepoRef(owner=m.group(1), repo=m.group(2), directory=directory if isinstance(directory, str) else None)
-    return None
+    # Explicit GitHub folder/file URLs are useful when a monorepo contains several packages.
+    # Keep only the repository-relative directory; resolution still chooses the release's exact tag/commit.
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+    if parsed.scheme not in ("https", "http") or (parsed.hostname or "").lower() not in ("github.com", "www.github.com"):
+        return None
+    parts = [unquote(part) for part in (parsed.path or "").split("/") if part]
+    if len(parts) < 2 or not _valid_ref_part(parts[0], parts[1]):
+        return None
+    repo_name = parts[1][:-4] if parts[1].endswith(".git") else parts[1]
+    folder = None
+    if len(parts) > 2:
+        if parts[2] == "tree" and len(parts) >= 4:
+            folder = "/".join(parts[4:]) or None
+        elif parts[2] == "blob" and len(parts) >= 5:
+            folder = "/".join(parts[4:-1]) or None
+        else:
+            return None
+    return RepoRef(owner=parts[0], repo=repo_name, directory=folder)
 
 
 def extract_github_repo(url: Any) -> Optional[RepoRef]:

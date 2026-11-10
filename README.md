@@ -1,7 +1,10 @@
 # TrustPack
 
-TrustPack checks whether a package published to **npm** or **PyPI** actually matches the source
-repository it claims to come from. It downloads the published artifact and the matching source revision,
+TrustPack checks whether a package published to a supported package registry actually matches the source
+repository it claims to come from. Supported ecosystems include npm, PyPI, Maven Central, NuGet, crates.io,
+Go modules, RubyGems, Packagist, pub.dev, Hex, CocoaPods, SwiftPM GitHub releases, Conda-forge, selected
+Linux distributions, and public Docker Hub images. Paste a GitHub repository or directory URL to detect
+package manifests and autofill package candidates. TrustPack downloads the published artifact and matching source revision,
 compares every file by SHA-256, checks registry integrity/provenance, and returns an evidence-based
 verdict (`VERIFIED` / `WARNING` / `HIGH_RISK`) — never a bare "safe" or "unsafe". An optional AI step can
 explain that verdict in plain language, but it never computes or changes it.
@@ -59,8 +62,8 @@ npm run dev
 ```
 
 By default it talks to the backend at `http://localhost:8000` (`.env.local` already sets
-`VITE_API_BASE_URL`). Open the URL it prints, go to **New Analysis**, and submit an npm or PyPI package
-with its source repository URL.
+`VITE_API_BASE_URL`). Open the URL it prints, go to **New Analysis**, select an ecosystem, or paste a
+GitHub repository/directory URL to scan package manifests and autofill a detected package.
 
 ## Enabling the AI agent
 

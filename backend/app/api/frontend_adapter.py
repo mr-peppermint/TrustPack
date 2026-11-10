@@ -21,7 +21,14 @@ def _iso(ts: Any) -> str:
 
 
 def ecosystem_label(ecosystem: str) -> str:
-    return "PyPI" if (ecosystem or "").lower() == "pypi" else "npm"
+    labels = {
+        "npm": "npm", "pypi": "PyPI", "maven": "Maven Central", "nuget": "NuGet",
+        "cargo": "crates.io", "go": "Go modules", "rubygems": "RubyGems",
+        "packagist": "Packagist", "pub": "pub.dev", "hex": "Hex",
+        "cocoapods": "CocoaPods", "swiftpm": "SwiftPM", "conda": "Conda",
+        "linux": "Linux", "oci": "OCI",
+    }
+    return labels.get((ecosystem or "npm").lower(), ecosystem or "npm")
 
 
 def status_of(report: Dict[str, Any]) -> str:

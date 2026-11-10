@@ -1,13 +1,24 @@
 # TrustPack Backend
 
-FastAPI service that answers one question for **npm** and **PyPI** packages: *does the artifact published to
-the registry correspond to the source repository it claims to come from?* It downloads the release, resolves
+FastAPI service that compares releases from npm, PyPI, Maven Central, NuGet, crates.io, Go modules, RubyGems,
+Packagist, pub.dev, Hex, CocoaPods, SwiftPM GitHub tags, Conda-forge, selected Linux repositories, and public
+Docker Hub images against claimed source repositories. It downloads the release, resolves
 the repository, compares every file by SHA-256, classifies the differences, reports provenance, and returns
 an evidence-based verdict. An optional GPT-OSS-120B step explains the result in plain language.
 
 The verdict is **deterministic**. The AI can explain it but cannot compute it, change it or add to it. A
 package with no findings is reported as "no concerning differences identified by the implemented checks" —
 never as "safe".
+
+The additional adapters are best-effort integrations with explicit format boundaries: npm and PyPI retain
+their specialized provenance checks; most other ecosystems report provenance as unavailable. CocoaPods and
+SwiftPM use GitHub source archives, not a separately built artifact. Conda currently selects `tar.bz2`
+packages from conda-forge; Linux support currently covers Debian snapshots and Alpine latest-stable/main;
+Fedora RPM is not supported. OCI pulls public Docker Hub images for `linux/amd64`; zstd-compressed layers and
+private registries are not supported. GitHub manifest detection scans up to 40 matching manifests under the
+default branch or the directory in the supplied GitHub URL. Some detected projects (for example Go modules,
+SwiftPM packages, and container images) do not declare a release version in their repository manifest, so the
+version must be entered manually.
 
 ## Contents
 1. [Architecture](#architecture)
@@ -196,9 +207,10 @@ Railway and Fly.io work the same way with their own equivalent config.
   to wake on the next request. If "reach it anytime" needs to mean "no cold-start delay, ever," that
   requires a paid/always-on plan, not a free one — the free tier is "always reachable eventually within
   one slow request," not "always warm."
-- `DATABASE_PATH`'s SQLite file and the rate limiter's in-memory counters live on that one instance; they
-  reset on every redeploy and don't survive a host migration. The Supabase cache, if configured, is the
-  only piece of state that's actually durable and shared across instances/redeploys.
+- Local SQLite remains the development/fallback store. On hosts with ephemeral filesystems, set
+  `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` and apply `supabase/schema.sql` once; report history is then
+  mirrored to the durable `analysis_reports` table and read back after restarts. The `/health` response
+  exposes `historyStorage` as `supabase` or `local_sqlite`, and startup logs warn when only local SQLite is active.
 
 ## Configuration
 
@@ -216,7 +228,8 @@ important ones:
 | `ANALYSIS_TIMEOUT_SECONDS` | 90 | budget for the deterministic analysis |
 | `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_TIMEOUT` | off / groq / `openai/gpt-oss-120b` / empty / empty / 60 | see below |
 | `CORS_ORIGINS` | `localhost:3000,5173` | browser origins allowed to call the API |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | empty / empty | shared analysis cache, see below |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | empty / empty | durable report history and shared cache, see below |
+| `SUPABASE_HISTORY_TABLE` | `analysis_reports` | durable report history table in Supabase |
 | `CACHE_TTL_SECONDS`, `CACHE_ENGINE_VERSION` | 604800 (7 days) / `1` | cache freshness |
 
 ## Shared analysis cache (Supabase)
@@ -228,9 +241,20 @@ from any user or server instance — is served straight from the cache, skipping
 extraction and comparison entirely. The result carries `"cache": {"hit": true, ...}` (`fromCache: true` in
 the frontend contract) so the UI can show it was cached.
 
+## Durable report history (Supabase)
+
+SQLite history is instance-local and is not durable on Render's free web service. To keep history across
+cold starts and redeploys, configure the same `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` used by the optional
+cache, then run all of `supabase/schema.sql` in the Supabase SQL Editor. This creates `analysis_reports` in
+addition to `analysis_cache`; report records are upserted there, so re-saving an existing report updates its
+same ID. `SUPABASE_HISTORY_TABLE` can override the table name. If Supabase is unreachable, the backend keeps
+serving and writes locally as a fallback, but those fallback writes cannot survive an ephemeral-filesystem
+reset. The health endpoint reports which history store is active.
+
 1. Create a free project at [supabase.com](https://supabase.com).
-2. In the SQL editor, run [supabase/schema.sql](supabase/schema.sql) to create the `analysis_cache` table.
-   Row Level Security is enabled with no policies, so only the service-role key below can read or write it.
+2. In the SQL editor, run [supabase/schema.sql](supabase/schema.sql) to create the `analysis_cache` and
+   `analysis_reports` tables. Row Level Security is enabled with no policies, so only the service-role key
+   below can read or write them.
 3. In `backend/.env`:
    ```env
    SUPABASE_URL=https://<project-ref>.supabase.co
@@ -238,7 +262,8 @@ the frontend contract) so the UI can show it was cached.
    ```
 4. Restart the server.
 
-Without both variables set, the cache is simply off and every analysis runs fresh — nothing else changes.
+Without both variables set, durable history and the shared cache are off; history stays in local SQLite.
+On Render Free, configure these values to retain history across cold starts.
 Only a *complete* deterministic analysis is ever cached (a download failure, timeout or AI explanation is
 never stored or served as if it were a hit). If `AI_ENABLED` is on and a cached entry doesn't have one yet,
 an explanation is generated for it on that request and the cache is updated, without re-running the

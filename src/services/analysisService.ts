@@ -3,6 +3,7 @@ import type {
   AnalysisRequest,
   AnalysisResult,
   AnalysisSummary,
+  RepositoryDetection,
   StartupProgress,
 } from '../types/analysis';
 
@@ -13,11 +14,11 @@ type ApiErrorPayload = { error?: { code?: string; message?: string; details?: un
 export function analysisErrorMessage(code?: string | null, message?: string | null): string {
   const serverMessage = message?.trim();
   switch (code) {
-    case 'package_not_found': return `${serverMessage || 'That package name was not found in the selected registry.'} Check that the ecosystem matches the package type: npm is for JavaScript packages and PyPI is for Python packages.`;
+    case 'package_not_found': return `${serverMessage || 'That package name was not found in the selected registry.'} Check that the selected ecosystem matches the package type; each ecosystem uses a different registry.`;
     case 'version_not_found': return serverMessage || 'That version was not found for this package. Enter an exact published version.';
     case 'invalid_package_name': return serverMessage || 'The package name is invalid for the selected ecosystem.';
     case 'invalid_version': return serverMessage || 'The version format is invalid. Enter an exact published version.';
-    case 'unsupported_ecosystem': return serverMessage || 'Choose npm or PyPI.';
+    case 'unsupported_ecosystem': return serverMessage || 'Choose one of the supported package ecosystems.';
     case 'unsupported_host': return serverMessage || 'The repository link is not supported. Use a GitHub repository URL.';
     case 'upstream_rate_limited': return serverMessage || 'The package registry or source host is rate limiting requests. Please try again shortly.';
     case 'upstream_timeout':
@@ -54,6 +55,7 @@ export const apiConfig = {
     getProgress: (env.VITE_ENDPOINT_GET_PROGRESS as string | undefined) ?? '/analyses/{id}/progress',
     history: (env.VITE_ENDPOINT_HISTORY as string | undefined) ?? '/analyses',
     startupProgress: (env.VITE_ENDPOINT_STARTUP_PROGRESS as string | undefined) ?? '/api/startup-progress',
+    detectRepository: (env.VITE_ENDPOINT_DETECT_REPOSITORY as string | undefined) ?? '/api/detect-repository',
   },
 };
 
@@ -75,6 +77,10 @@ export function health(): Promise<{ status: string }> {
 /** Returns the backend's boot progress (phase / percent / ready). */
 export function startupProgress(): Promise<StartupProgress> {
   return http(apiConfig.endpoints.startupProgress);
+}
+
+export function detectRepository(url: string): Promise<RepositoryDetection> {
+  return http(`${apiConfig.endpoints.detectRepository}?url=${encodeURIComponent(url)}`);
 }
 
 /** Returns the in-flight progress of an analysis started via POST /analyses. */

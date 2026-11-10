@@ -11,6 +11,7 @@ from app.models.request import AnalyzeRequest
 from app.models.response import AnalyzeResponse
 from app.services import ai_explainer, analysis_cache, orchestrator, report_generator
 from app.services.progress import analysis_progress
+from app.services.repository_detection import detect_repository
 from app.startup_progress import startup
 from app.utils.errors import AnalysisTimeoutError, TrustPackError
 from app.utils.logging import get_logger
@@ -116,6 +117,11 @@ async def startup_progress_endpoint() -> dict:
     return startup.snapshot()
 
 
+@router.get("/api/detect-repository", dependencies=[Depends(enforce_rate_limit)])
+async def detect_repository_endpoint(url: str) -> dict:
+    return await detect_repository(url)
+
+
 @router.get("/api/analyses/{analysis_id}/progress")
 @router.get("/analyses/{analysis_id}/progress")
 async def analysis_progress_endpoint(analysis_id: str) -> dict:
@@ -134,7 +140,7 @@ def _history_item(report: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": report["report_id"],
         "created_at": report.get("created_at"),
-        "package": {"name": package.get("name"), "version": package.get("version"), "ecosystem": package.get("ecosystem", "npm")},
+        "package": {"name": package.get("name"), "version": package.get("version"), "ecosystem": frontend_adapter.ecosystem_label(package.get("ecosystem", "npm"))},
         "repository": (report.get("source") or {}).get("repository"),
         "verdict": risk.get("verdict"),
         "risk_level": risk.get("level"),
@@ -149,7 +155,9 @@ def _history_item(report: Dict[str, Any]) -> Dict[str, Any]:
 @router.get("/health")
 @router.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    from app.services.report_store import history_storage_status
+
+    return {"status": "ok", "historyStorage": history_storage_status()}
 
 
 # ----------------------------------------------------------------------------- canonical API

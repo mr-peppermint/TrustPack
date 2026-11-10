@@ -77,7 +77,7 @@ export default function NewAnalysis() {
       <div>
         <h2 className="font-display text-2xl font-semibold tracking-tight">Analyze a package</h2>
         <p className="mt-1 text-sm text-muted">
-          Enter a published npm or PyPI package and its source repository to check for unexpected differences.
+          Enter a package release or paste a GitHub repository or directory link to detect package manifests and compare a release with its source.
         </p>
       </div>
 

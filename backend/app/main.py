@@ -26,10 +26,17 @@ async def lifespan(_app: FastAPI):
     startup.advance("loading-config", 20, "Loading configuration…")
     startup.advance("connecting-database", 50, "Opening history database…")
     try:
-        from app.services.report_store import _connect
+        from app.services.report_store import _connect, check_durable_history, durable_history_enabled
 
         with closing(_connect()) as _conn:  # ensure the schema exists before clients connect
             pass
+        if durable_history_enabled():
+            if check_durable_history():
+                logger.info("Durable report history is enabled through Supabase")
+            else:
+                logger.error("Supabase history is configured but its table is not reachable; run backend/supabase/schema.sql and verify credentials")
+        else:
+            logger.warning("Durable report history is disabled; SQLite history can be lost when the host filesystem resets")
     except Exception:  # pragma: no cover - warm-up must never block startup
         logger.warning("History database warm-up skipped")
     startup.advance("warming-cache", 80, "Warming analysis cache…")

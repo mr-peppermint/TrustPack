@@ -69,6 +69,7 @@ class Settings:
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
     SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
     SUPABASE_TABLE: str = os.getenv("SUPABASE_TABLE", "").strip() or "analysis_cache"
+    SUPABASE_HISTORY_TABLE: str = os.getenv("SUPABASE_HISTORY_TABLE", "").strip() or "analysis_reports"
     SUPABASE_TIMEOUT: float = float(os.getenv("SUPABASE_TIMEOUT", "5"))
     # Cached reports older than this are ignored (0 = never expire). Bump CACHE_ENGINE_VERSION after
     # changing detection rules or scoring so older cached verdicts are no longer served.

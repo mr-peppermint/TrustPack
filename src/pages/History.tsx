@@ -37,6 +37,19 @@ export default function History() {
           <option value="all">All ecosystems</option>
           <option value="npm">npm</option>
           <option value="PyPI">PyPI</option>
+          <option value="Maven Central">Maven Central</option>
+          <option value="NuGet">NuGet</option>
+          <option value="crates.io">crates.io</option>
+          <option value="Go modules">Go modules</option>
+          <option value="RubyGems">RubyGems</option>
+          <option value="Packagist">Packagist</option>
+          <option value="pub.dev">pub.dev</option>
+          <option value="Hex">Hex</option>
+          <option value="CocoaPods">CocoaPods</option>
+          <option value="SwiftPM">SwiftPM</option>
+          <option value="Conda">Conda</option>
+          <option value="Linux">Linux</option>
+          <option value="OCI">OCI</option>
         </select>
         <select className="input sm:w-40" aria-label="Filter by risk status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="all">All statuses</option>

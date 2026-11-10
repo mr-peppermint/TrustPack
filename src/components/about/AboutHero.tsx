@@ -12,7 +12,7 @@ export default function AboutHero() {
       <p className="mt-5 max-w-2xl animate-rise font-display text-2xl font-semibold tracking-tight sm:text-3xl" style={after(d + 0.7)}>Understand What You Install.</p>
       <div className="mt-5 max-w-2xl animate-rise space-y-3 leading-relaxed text-muted" style={after(d + 0.85)}>
         <p>
-          TrustPack is a software supply-chain security tool that compares published npm and PyPI packages with their corresponding source repositories.
+          TrustPack is a software supply-chain security tool that compares published packages and container images with corresponding source repositories across supported ecosystems.
         </p>
         <p>
           The core problem: a published package can contain changes that are not present in its source repository. Reading the repository does not tell you what the registry actually ships.

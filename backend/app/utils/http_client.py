@@ -89,6 +89,7 @@ async def safe_stream_download(
     allowed_hosts: Iterable[str],
     *,
     max_size_bytes: int,
+    headers: Optional[dict] = None,
     max_redirects: Optional[int] = None,
 ) -> bytes:
     """Stream a GET body with per-hop SSRF validation and a hard size cap,
@@ -100,7 +101,7 @@ async def safe_stream_download(
     next_url = url
     for _ in range(max_redirects + 1):
         validate_outbound_url(next_url, allowed_hosts)
-        async with client.stream("GET", next_url, follow_redirects=False) as resp:
+        async with client.stream("GET", next_url, headers=headers, follow_redirects=False) as resp:
             if resp.status_code in (301, 302, 303, 307, 308):
                 location = resp.headers.get("location")
                 if not location:

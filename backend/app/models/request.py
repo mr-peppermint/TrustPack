@@ -3,7 +3,10 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator, model_validator
 
-SUPPORTED_ECOSYSTEMS = ("npm", "pypi")
+SUPPORTED_ECOSYSTEMS = (
+    "npm", "pypi", "maven", "nuget", "cargo", "go", "rubygems", "packagist",
+    "pub", "hex", "cocoapods", "swiftpm", "conda", "linux", "oci",
+)
 
 # npm package name rules: optional @scope/, lowercase, no leading dot/underscore,
 # url-safe characters only, max 214 chars total.
@@ -21,6 +24,21 @@ _PEP440_RE = re.compile(
     r"(?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?$",
     re.IGNORECASE,
 )
+_EXTRA_NAME_RULES = {
+    "maven": re.compile(r"^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$"),
+    "nuget": re.compile(r"^[A-Za-z0-9_.-]{1,128}$"),
+    "cargo": re.compile(r"^[A-Za-z0-9_-]{1,64}$"),
+    "go": re.compile(r"^[A-Za-z0-9._~/-]{1,300}$"),
+    "rubygems": re.compile(r"^[A-Za-z0-9_-]{1,128}$"),
+    "packagist": re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"),
+    "pub": re.compile(r"^[a-z][a-z0-9_]{0,62}$"),
+    "hex": re.compile(r"^[A-Za-z0-9_.-]{1,128}$"),
+    "cocoapods": re.compile(r"^[A-Za-z0-9_.+-]{1,128}$"),
+    "swiftpm": re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"),
+    "conda": re.compile(r"^[A-Za-z0-9_.-]{1,128}$"),
+    "linux": re.compile(r"^[A-Za-z0-9_.+:-]{1,256}$"),
+    "oci": re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"),
+}
 
 
 class AnalyzeRequest(BaseModel):
@@ -69,9 +87,17 @@ class AnalyzeRequest(BaseModel):
                 )
             if not _SEMVER_RE.match(self.version):
                 raise ValueError("version must be an exact semantic version, e.g. '1.2.3'")
-        else:
+        elif self.ecosystem == "pypi":
             if not (0 < len(self.package_name) <= 214 and _PYPI_NAME_RE.match(self.package_name)):
                 raise ValueError("package_name must be a valid PyPI project name, e.g. 'requests'")
             if len(self.version) > 64 or not _PEP440_RE.match(self.version):
                 raise ValueError("version must be an exact PEP 440 version, e.g. '2.32.0'")
+        else:
+            name_rule = _EXTRA_NAME_RULES[self.ecosystem]
+            if len(self.package_name) > 300 or not name_rule.fullmatch(self.package_name):
+                raise ValueError("package_name is not valid for the selected ecosystem")
+            if self.ecosystem == "go" and any(part in ("", ".", "..") for part in self.package_name.split("/")):
+                raise ValueError("Go module path contains an invalid path segment")
+            if not self.version or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+_!~:-]{0,127}", self.version):
+                raise ValueError("version must be an exact, non-empty release identifier")
         return self

@@ -1,4 +1,4 @@
-export type Ecosystem = 'npm' | 'PyPI';
+export type Ecosystem = 'npm' | 'PyPI' | 'maven' | 'nuget' | 'cargo' | 'go' | 'rubygems' | 'packagist' | 'pub' | 'hex' | 'cocoapods' | 'swiftpm' | 'conda' | 'linux' | 'oci';
 export type RiskStatus = 'verified' | 'warning' | 'high_risk';
 export type ChangeType = 'added' | 'removed' | 'modified' | 'unchanged';
 export type RiskLevel = 'none' | 'low' | 'medium' | 'high';
@@ -14,6 +14,20 @@ export interface AnalysisRequest {
   name: string;
   version: string;
   repoUrl: string;
+}
+
+export interface DetectedPackage {
+  ecosystem: Exclude<Ecosystem, 'PyPI'> | 'pypi';
+  name: string;
+  version: string;
+  manifest: string;
+}
+
+export interface RepositoryDetection {
+  repository: string;
+  defaultBranch: string;
+  truncated: boolean;
+  packages: DetectedPackage[];
 }
 
 export interface FileChange {

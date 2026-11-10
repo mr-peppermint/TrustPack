@@ -7,7 +7,7 @@ const STACK: { icon: LucideIcon; name: string; role: string }[] = [
   { icon: Terminal, name: 'Python', role: 'Backend and analysis engine' },
   { icon: Hash, name: 'SHA-256', role: 'File integrity comparison' },
   { icon: Sparkles, name: 'GPT-OSS-120B', role: 'AI-powered explanations' },
-  { icon: Package, name: 'npm and PyPI', role: 'Supported package ecosystems' },
+  { icon: Package, name: '15 ecosystems', role: 'Package and container release adapters' },
 ];
 
 export default function TechStack() {
